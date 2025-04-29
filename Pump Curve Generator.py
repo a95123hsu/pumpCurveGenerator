@@ -390,33 +390,80 @@ st.plotly_chart(fig, use_container_width=False)
 # 添加導出圖像功能
 st.subheader("導出圖像")
 
-# 加密轉換為圖片的功能
-def fig_to_base64(fig):
-    img_bytes = fig.to_image(format="png", width=chart_width, height=chart_height)
-    buffer = io.BytesIO(img_bytes)
-    img_str = base64.b64encode(buffer.getvalue()).decode()
-    return img_str
+# 使用matplotlib替代方法生成圖片
+def save_plotly_fig_as_image(fig):
+    # 將Plotly圖表保存為HTML
+    temp_html = "temp_figure.html"
+    fig.write_html(temp_html)
+    
+    # 使用Streamlit的下載功能
+    with open(temp_html, "rb") as file:
+        html_content = file.read()
+    
+    # 提供HTML檔案下載
+    st.download_button(
+        label="下載泵浦曲線圖 (HTML格式)",
+        data=html_content,
+        file_name="pump_curve_chart.html",
+        mime="text/html",
+    )
+    
+    # 可選嘗試使用matplotlib再創建圖表
+    try:
+        import matplotlib.pyplot as plt
+        
+        # 創建matplotlib圖表
+        plt.figure(figsize=(chart_width/100, chart_height/100))
+        
+        # 繪製每個泵浦型號的曲線
+        for model_name, model_data in pump_models.items():
+            flow_data = model_data["flow"]
+            head_data = model_data["head"]
+            
+            if interpolate and len(flow_data) > 1:
+                # 生成插值用的點
+                x_smooth = np.linspace(min(flow_data), max(flow_data), 100)
+                y_smooth = np.interp(x_smooth, flow_data, head_data)
+                plt.plot(x_smooth, y_smooth, label=model_name)
+            else:
+                plt.plot(flow_data, head_data, label=model_name)
+                
+            if show_points:
+                plt.scatter(flow_data, head_data, s=30)
+        
+        # 設置坐標軸標籤和標題
+        plt.xlabel(f"流量 (Flow) - {flow_unit}")
+        plt.ylabel(f"揚程 (Head) - {head_unit}")
+        plt.title(chart_title)
+        plt.grid(enable_grid)
+        
+        # 添加頻率標註
+        plt.text(max_flow * 0.8, max_head * 0.8, frequency, fontsize=14)
+        
+        # 添加圖例
+        if show_legend:
+            plt.legend()
+        
+        # 保存為臨時檔案
+        plt_filename = "pump_curve_plot.png"
+        plt.savefig(plt_filename, dpi=300, bbox_inches="tight")
+        plt.close()
+        
+        # 提供PNG檔案下載
+        with open(plt_filename, "rb") as file:
+            img_data = file.read()
+        
+        st.download_button(
+            label="下載泵浦曲線圖 (PNG格式)",
+            data=img_data,
+            file_name="pump_curve_chart.png",
+            mime="image/png",
+        )
+    except Exception as e:
+        st.warning(f"無法生成PNG圖像，請使用HTML格式。錯誤：{e}")
 
-# 創建圖像下載按鈕
-img_base64 = fig_to_base64(fig)
-st.markdown(f'''
-    <a href="data:image/png;base64,{img_base64}" download="pump_curve.png">
-        <button style="
-            background-color: #4CAF50;
-            border: none;
-            color: white;
-            padding: 15px 32px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 10px;">
-            下載泵浦曲線圖
-        </button>
-    </a>
-    ''', unsafe_allow_html=True)
+# 調用函數代替直接使用to_image
+save_plotly_fig_as_image(fig)
 
 # 添加數據表顯示
 show_data_tables = st.checkbox("顯示所有泵浦型號數據", value=False)
