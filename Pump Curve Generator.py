@@ -24,8 +24,8 @@ def main():
             'k_factor': 0.0001,
             'max_flow': None,  # Auto-scale by default
             'max_head': None,  # Auto-scale by default
-            'min_flow': 0,     # Start at 0 by default
-            'min_head': 0,     # Start at 0 by default
+            'min_flow': 0.0,   # Start at 0 by default - use float
+            'min_head': 0.0,   # Start at 0 by default - use float
             'show_grid': True, # Show grid by default
         }
     
@@ -140,7 +140,8 @@ def main():
         with col_g:
             min_flow = st.number_input(
                 "Min Flow", 
-                value=st.session_state.chart_params['min_flow'], 
+                min_value=0.0,
+                value=float(st.session_state.chart_params['min_flow'] or 0.0), 
                 step=10.0,
                 key="min_flow_input",
                 on_change=lambda: setattr(
@@ -150,21 +151,27 @@ def main():
             )
             
         with col_h:
+            # Handle max_flow special case (None value)
+            max_flow_value = st.session_state.chart_params['max_flow']
+            max_flow_value = float(max_flow_value) if max_flow_value is not None else None
+            
             max_flow = st.number_input(
-                "Max Flow (blank for auto)", 
-                value=st.session_state.chart_params['max_flow'], 
+                "Max Flow (0 for auto)", 
+                min_value=0.0,
+                value=float(max_flow_value or 0.0), 
                 step=100.0,
                 key="max_flow_input",
                 on_change=lambda: setattr(
                     st.session_state, 'chart_params', 
-                    {**st.session_state.chart_params, 'max_flow': st.session_state.max_flow_input}
+                    {**st.session_state.chart_params, 'max_flow': st.session_state.max_flow_input if st.session_state.max_flow_input > 0 else None}
                 )
             )
             
         with col_i:
             min_head = st.number_input(
                 "Min Head", 
-                value=st.session_state.chart_params['min_head'], 
+                min_value=0.0,
+                value=float(st.session_state.chart_params['min_head'] or 0.0), 
                 step=1.0,
                 key="min_head_input",
                 on_change=lambda: setattr(
@@ -174,14 +181,19 @@ def main():
             )
             
         with col_j:
+            # Handle max_head special case (None value)
+            max_head_value = st.session_state.chart_params['max_head']
+            max_head_value = float(max_head_value) if max_head_value is not None else None
+            
             max_head = st.number_input(
-                "Max Head (blank for auto)", 
-                value=st.session_state.chart_params['max_head'], 
+                "Max Head (0 for auto)", 
+                min_value=0.0,
+                value=float(max_head_value or 0.0), 
                 step=1.0,
                 key="max_head_input",
                 on_change=lambda: setattr(
                     st.session_state, 'chart_params', 
-                    {**st.session_state.chart_params, 'max_head': st.session_state.max_head_input}
+                    {**st.session_state.chart_params, 'max_head': st.session_state.max_head_input if st.session_state.max_head_input > 0 else None}
                 )
             )
         
@@ -397,8 +409,8 @@ def handle_manual_input():
     return None
 
 def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curve=False, 
-                       static_head=0, k_factor=0, refresh_counter=0, min_flow=0, max_flow=None,
-                       min_head=0, max_head=None, show_grid=True):
+                       static_head=0.0, k_factor=0.0, refresh_counter=0, min_flow=0.0, max_flow=None,
+                       min_head=0.0, max_head=None, show_grid=True):
     # Create a larger figure to prevent text overlap
     if chart_style == "Modern":
         plt.style.use('seaborn-v0_8-whitegrid')
@@ -488,14 +500,17 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
     ax.yaxis.set_minor_locator(AutoMinorLocator())
     
     # Apply custom axis limits if provided
-    if min_flow is not None:
-        ax.set_xlim(left=min_flow)
-    if max_flow is not None:
-        ax.set_xlim(right=max_flow)
-    if min_head is not None:
-        ax.set_ylim(bottom=min_head)
-    if max_head is not None:
-        ax.set_ylim(top=max_head)
+    # Set x-axis limits
+    if max_flow is None:
+        ax.set_xlim(left=float(min_flow))
+    else:
+        ax.set_xlim(left=float(min_flow), right=float(max_flow))
+    
+    # Set y-axis limits
+    if max_head is None:
+        ax.set_ylim(bottom=float(min_head))
+    else:
+        ax.set_ylim(bottom=float(min_head), top=float(max_head))
     
     # Add secondary x-axis for alternative flow units if primary is LPM
     if flow_unit == "LPM":
