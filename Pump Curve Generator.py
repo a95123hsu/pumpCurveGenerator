@@ -49,6 +49,144 @@ def main():
     tab1, tab2 = st.tabs(["Create Pump Curves", "About Pump Curves"])
     
     with tab1:
+        # MOVED CHART CONFIGURATION TO APPEAR BEFORE DATA INPUT
+        # Configuration options
+        st.subheader("Chart Configuration")
+        
+        # Create columns for chart options
+        col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
+        
+        # When any option changes, immediately update session state
+        with col_a:
+            frequency = st.selectbox(
+                "Frequency (Hz)", 
+                [50, 60], 
+                index=[50, 60].index(st.session_state.chart_params['frequency']),
+                key="frequency_select",
+                on_change=lambda: setattr(
+                    st.session_state, 'chart_params', 
+                    {**st.session_state.chart_params, 'frequency': st.session_state.frequency_select}
+                )
+            )
+        
+        with col_b:
+            chart_style = st.selectbox(
+                "Chart Style", 
+                ["Modern", "Classic"], 
+                index=["Modern", "Classic"].index(st.session_state.chart_params['chart_style']),
+                key="chart_style_select",
+                on_change=lambda: setattr(
+                    st.session_state, 'chart_params', 
+                    {**st.session_state.chart_params, 'chart_style': st.session_state.chart_style_select}
+                )
+            )
+        
+        with col_c:
+            show_system = st.checkbox(
+                "Show System Curve", 
+                value=st.session_state.chart_params['show_system_curve'],
+                key="system_curve_checkbox",
+                on_change=lambda: setattr(
+                    st.session_state, 'chart_params', 
+                    {**st.session_state.chart_params, 'show_system_curve': st.session_state.system_curve_checkbox}
+                )
+            )
+        
+        with col_d:
+            show_grid = st.checkbox(
+                "Show Grid", 
+                value=st.session_state.chart_params['show_grid'],
+                key="show_grid_checkbox",
+                on_change=lambda: setattr(
+                    st.session_state, 'chart_params', 
+                    {**st.session_state.chart_params, 'show_grid': st.session_state.show_grid_checkbox}
+                )
+            )
+        
+        # System curve parameters (only shown if show_system_curve is True)
+        if st.session_state.chart_params['show_system_curve']:
+            col_e, col_f = st.columns(2)
+            with col_e:
+                static_head = st.number_input(
+                    "Static Head (m)", 
+                    min_value=0.0, 
+                    value=st.session_state.chart_params['static_head'], 
+                    step=0.5,
+                    key="static_head_input",
+                    on_change=lambda: setattr(
+                        st.session_state, 'chart_params', 
+                        {**st.session_state.chart_params, 'static_head': st.session_state.static_head_input}
+                    )
+                )
+            
+            with col_f:
+                k_factor = st.number_input(
+                    "Friction Factor (k)", 
+                    min_value=0.00001, 
+                    value=st.session_state.chart_params['k_factor'], 
+                    format="%.6f", 
+                    step=0.00001,
+                    key="k_factor_input",
+                    on_change=lambda: setattr(
+                        st.session_state, 'chart_params', 
+                        {**st.session_state.chart_params, 'k_factor': st.session_state.k_factor_input}
+                    )
+                )
+        
+        # Add axis range controls
+        st.subheader("Axis Range Settings")
+        col_g, col_h, col_i, col_j = st.columns(4)
+        
+        with col_g:
+            min_flow = st.number_input(
+                "Min Flow", 
+                value=st.session_state.chart_params['min_flow'], 
+                step=10.0,
+                key="min_flow_input",
+                on_change=lambda: setattr(
+                    st.session_state, 'chart_params', 
+                    {**st.session_state.chart_params, 'min_flow': st.session_state.min_flow_input}
+                )
+            )
+            
+        with col_h:
+            max_flow = st.number_input(
+                "Max Flow (blank for auto)", 
+                value=st.session_state.chart_params['max_flow'], 
+                step=100.0,
+                key="max_flow_input",
+                on_change=lambda: setattr(
+                    st.session_state, 'chart_params', 
+                    {**st.session_state.chart_params, 'max_flow': st.session_state.max_flow_input}
+                )
+            )
+            
+        with col_i:
+            min_head = st.number_input(
+                "Min Head", 
+                value=st.session_state.chart_params['min_head'], 
+                step=1.0,
+                key="min_head_input",
+                on_change=lambda: setattr(
+                    st.session_state, 'chart_params', 
+                    {**st.session_state.chart_params, 'min_head': st.session_state.min_head_input}
+                )
+            )
+            
+        with col_j:
+            max_head = st.number_input(
+                "Max Head (blank for auto)", 
+                value=st.session_state.chart_params['max_head'], 
+                step=1.0,
+                key="max_head_input",
+                on_change=lambda: setattr(
+                    st.session_state, 'chart_params', 
+                    {**st.session_state.chart_params, 'max_head': st.session_state.max_head_input}
+                )
+            )
+        
+        st.markdown("---")
+        
         # Sidebar for input method selection
         input_method = st.radio(
             "Select Input Method",
@@ -62,108 +200,37 @@ def main():
         
         # Generate and display the pump curve if data is available
         if df is not None and not df.empty:
+            st.session_state.current_df = df  # Store the current dataframe
+            
             col1, col2 = st.columns([3, 1])
             
             with col1:
-                # Configuration options
-                st.subheader("Chart Configuration")
-                
-                # Initialize chart parameters in session state if not present
-                if 'chart_params' not in st.session_state:
-                    st.session_state.chart_params = {
-                        'frequency': 50,
-                        'chart_style': "Modern",
-                        'show_system_curve': False,
-                        'static_head': 2.0,
-                        'k_factor': 0.0001,
-                    }
-                
-                # Create columns for chart options
-                col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
-                
-                # When any option changes, immediately update session state
-                with col_a:
-                    frequency = st.selectbox(
-                        "Frequency (Hz)", 
-                        [50, 60], 
-                        index=[50, 60].index(st.session_state.chart_params['frequency']),
-                        key="frequency_select",
-                        on_change=lambda: setattr(
-                            st.session_state, 'chart_params', 
-                            {**st.session_state.chart_params, 'frequency': st.session_state.frequency_select}
-                        )
-                    )
-                
-                with col_b:
-                    chart_style = st.selectbox(
-                        "Chart Style", 
-                        ["Modern", "Classic"], 
-                        index=["Modern", "Classic"].index(st.session_state.chart_params['chart_style']),
-                        key="chart_style_select",
-                        on_change=lambda: setattr(
-                            st.session_state, 'chart_params', 
-                            {**st.session_state.chart_params, 'chart_style': st.session_state.chart_style_select}
-                        )
-                    )
-                
-                with col_c:
-                    show_system = st.checkbox(
-                        "Show System Curve", 
-                        value=st.session_state.chart_params['show_system_curve'],
-                        key="system_curve_checkbox",
-                        on_change=lambda: setattr(
-                            st.session_state, 'chart_params', 
-                            {**st.session_state.chart_params, 'show_system_curve': st.session_state.system_curve_checkbox}
-                        )
-                    )
-                
-                with col_d:
-                    refresh_button = st.button("Refresh Chart", key="refresh_chart_button")
-                
-                # System curve parameters (only shown if show_system_curve is True)
-                if st.session_state.chart_params['show_system_curve']:
-                    col_d, col_e = st.columns(2)
-                    with col_d:
-                        static_head = st.number_input(
-                            "Static Head (m)", 
-                            min_value=0.0, 
-                            value=st.session_state.chart_params['static_head'], 
-                            step=0.5,
-                            key="static_head_input",
-                            on_change=lambda: setattr(
-                                st.session_state, 'chart_params', 
-                                {**st.session_state.chart_params, 'static_head': st.session_state.static_head_input}
-                            )
-                        )
-                    
-                    with col_e:
-                        k_factor = st.number_input(
-                            "Friction Factor (k)", 
-                            min_value=0.00001, 
-                            value=st.session_state.chart_params['k_factor'], 
-                            format="%.6f", 
-                            step=0.00001,
-                            key="k_factor_input",
-                            on_change=lambda: setattr(
-                                st.session_state, 'chart_params', 
-                                {**st.session_state.chart_params, 'k_factor': st.session_state.k_factor_input}
-                            )
-                        )
+                # Add refresh button
+                if st.button("Generate/Refresh Chart", key="refresh_chart_button"):
+                    st.session_state.chart_generated = True
                 
                 # Generate curve using parameters from session state
-                params = st.session_state.chart_params
-                fig = generate_pump_curve(
-                    df, 
-                    params['frequency'], 
-                    params['chart_style'], 
-                    params['show_system_curve'], 
-                    params['static_head'], 
-                    params['k_factor']
-                )
-                st.pyplot(fig)
-                
-                # Add download button for the plot
-                download_button_for_plot(fig)
+                if st.session_state.chart_generated:
+                    params = st.session_state.chart_params
+                    fig = generate_pump_curve(
+                        df, 
+                        params['frequency'], 
+                        params['chart_style'], 
+                        params['show_system_curve'], 
+                        params['static_head'], 
+                        params['k_factor'],
+                        min_flow=params['min_flow'],
+                        max_flow=params['max_flow'],
+                        min_head=params['min_head'],
+                        max_head=params['max_head'],
+                        show_grid=params['show_grid']
+                    )
+                    st.pyplot(fig)
+                    
+                    # Add download button for the plot
+                    download_button_for_plot(fig)
+                else:
+                    st.info("Click 'Generate/Refresh Chart' to create the pump curve with your current configuration settings.")
             
             with col2:
                 st.subheader("Pump Curve Data")
@@ -314,12 +381,14 @@ def handle_manual_input():
         # Submit button
         col1, col2 = st.columns(2)
         with col1:
-            submitted = st.form_submit_button("Generate Curve")
+            submitted = st.form_submit_button("Submit Data")
         with col2:
             # Add a refresh button inside the form
             refresh_data = st.form_submit_button("Refresh Form")
         
         if submitted:
+            # Mark that we need to generate the chart
+            st.session_state.chart_generated = False
             return edited_df
         elif refresh_data:
             # Just return the current data to update the form
@@ -328,7 +397,8 @@ def handle_manual_input():
     return None
 
 def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curve=False, 
-                       static_head=0, k_factor=0, refresh_counter=0):
+                       static_head=0, k_factor=0, refresh_counter=0, min_flow=0, max_flow=None,
+                       min_head=0, max_head=None, show_grid=True):
     # Create a larger figure to prevent text overlap
     if chart_style == "Modern":
         plt.style.use('seaborn-v0_8-whitegrid')
@@ -368,8 +438,8 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
     
     # Add system curve if requested
     if show_system_curve:
-        max_flow = df[flow_col].max() * 1.2
-        system_flows = np.linspace(0, max_flow, 100)
+        max_flow_val = df[flow_col].max() * 1.2 if max_flow is None else max_flow
+        system_flows = np.linspace(0, max_flow_val, 100)
         system_heads = static_head + k_factor * (system_flows ** 2)
         
         # Plot system curve with dashed line
@@ -405,18 +475,27 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
     
-    # Add grid
-    ax.grid(True, which='major', linestyle='-', linewidth=0.5)
-    if chart_style == "Modern":
-        ax.grid(True, which='minor', linestyle=':', linewidth=0.5, alpha=0.7)
+    # Add grid based on user preference
+    if show_grid:
+        ax.grid(True, which='major', linestyle='-', linewidth=0.5)
+        if chart_style == "Modern":
+            ax.grid(True, which='minor', linestyle=':', linewidth=0.5, alpha=0.7)
+    else:
+        ax.grid(False)
     
     # Add minor ticks
     ax.xaxis.set_minor_locator(AutoMinorLocator())
     ax.yaxis.set_minor_locator(AutoMinorLocator())
     
-    # Make sure axes start from 0
-    ax.set_xlim(0, None)
-    ax.set_ylim(0, None)
+    # Apply custom axis limits if provided
+    if min_flow is not None:
+        ax.set_xlim(left=min_flow)
+    if max_flow is not None:
+        ax.set_xlim(right=max_flow)
+    if min_head is not None:
+        ax.set_ylim(bottom=min_head)
+    if max_head is not None:
+        ax.set_ylim(top=max_head)
     
     # Add secondary x-axis for alternative flow units if primary is LPM
     if flow_unit == "LPM":
