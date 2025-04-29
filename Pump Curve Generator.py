@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import io
+import base64
 
 st.set_page_config(page_title="泵曲線繪製工具 | Pump Curve Plotting Tool", layout="wide")
 
@@ -45,30 +47,46 @@ def generate_pump_curve(model, unit_flow, unit_head):
     """根據泵型號和單位生成曲線數據"""
     
     # 預設模型數據 (根據圖片中的DS系列泵)
-    # 這裡使用簡化的數據點，實際應用中應使用更準確的數據
+    # 依據圖片中的曲線調整數據點
     model_data = {
         "DS-05": {
             "50Hz": {
-                "flow_lpm": [0, 100, 200, 230],
-                "head_m": [9, 5, 2, 0.5]
+                "flow_lpm": [0, 50, 100, 150, 200, 230],
+                "head_m": [9, 7, 5, 3.5, 2, 0.5]
+            },
+            "60Hz": {
+                "flow_lpm": [0, 60, 120, 180, 240, 280],
+                "head_m": [13, 10, 7.5, 5, 3, 0.7]
             }
         },
         "DS-10": {
             "50Hz": {
-                "flow_lpm": [0, 150, 300, 370],
-                "head_m": [13, 8, 4, 0.8]
+                "flow_lpm": [0, 75, 150, 225, 300, 370],
+                "head_m": [13, 11, 8, 6, 4, 0.8]
+            },
+            "60Hz": {
+                "flow_lpm": [0, 90, 180, 270, 360, 440],
+                "head_m": [19, 16, 12, 8, 5, 1]
             }
         },
         "DS-20": {
             "50Hz": {
-                "flow_lpm": [0, 200, 400, 550],
-                "head_m": [16, 11, 6, 0.9]
+                "flow_lpm": [0, 110, 220, 330, 440, 550],
+                "head_m": [16, 14, 11, 8, 6, 0.9]
+            },
+            "60Hz": {
+                "flow_lpm": [0, 130, 260, 390, 520, 650],
+                "head_m": [23, 20, 16, 12, 8, 1.3]
             }
         },
         "DS-30": {
             "50Hz": {
-                "flow_lpm": [0, 300, 600, 800],
-                "head_m": [18, 14, 8, 1]
+                "flow_lpm": [0, 160, 320, 480, 640, 800],
+                "head_m": [18, 17, 14, 11, 8, 1]
+            },
+            "60Hz": {
+                "flow_lpm": [0, 190, 380, 570, 760, 950],
+                "head_m": [25, 23, 20, 16, 11, 1.5]
             }
         }
     }
@@ -78,7 +96,12 @@ def generate_pump_curve(model, unit_flow, unit_head):
         return pd.DataFrame(columns=["Flow", "Head"])
     
     # 獲取基本數據
-    base_data = model_data.get(model, {}).get(frequency, model_data["DS-10"]["50Hz"])
+    if model in model_data and frequency in model_data[model]:
+        base_data = model_data[model][frequency]
+    else:
+        # 默認情況
+        base_data = model_data["DS-10"]["50Hz"]
+    
     df = pd.DataFrame({
         "Flow": base_data["flow_lpm"],
         "Head": base_data["head_m"]
@@ -99,15 +122,66 @@ def generate_pump_curve(model, unit_flow, unit_head):
 # 顯示當前選擇的參數
 st.write(f"當前選擇: {pump_model}, {frequency}, 揚程單位: {head_unit}, 流量單位: {flow_unit}")
 
-# 生成泵曲線數據
-curve_data = generate_pump_curve(
-    pump_model, 
-    flow_unit, 
-    head_unit
-)
+# 添加CSV上傳功能
+st.subheader("上傳自定義泵曲線數據 | Upload Custom Pump Curve Data")
+uploaded_file = st.file_uploader("上傳CSV文件 | Upload CSV file", type=['csv'])
 
-# 如果是自定義模式，提供數據輸入界面
-if pump_model.startswith("自定"):
+# 初始化曲線數據
+curve_data = None
+
+# 處理上傳的CSV文件
+if uploaded_file is not None:
+    try:
+        # 讀取CSV數據
+        df = pd.read_csv(uploaded_file)
+        st.success("文件上傳成功！| File uploaded successfully!")
+        
+        # 顯示上傳的數據
+        st.write("上傳的數據 | Uploaded data:")
+        st.dataframe(df)
+        
+        # 讓用戶選擇欄位
+        st.subheader("選擇數據欄位 | Select Data Columns")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            flow_column = st.selectbox(
+                "選擇流量欄位 | Select Flow Column",
+                options=df.columns.tolist(),
+                index=0 if len(df.columns) > 0 else None
+            )
+        
+        with col2:
+            head_column = st.selectbox(
+                "選擇揚程欄位 | Select Head Column",
+                options=df.columns.tolist(),
+                index=1 if len(df.columns) > 1 else 0 if len(df.columns) > 0 else None
+            )
+        
+        if flow_column and head_column:
+            # 創建曲線數據
+            curve_data = pd.DataFrame({
+                "Flow": df[flow_column],
+                "Head": df[head_column]
+            })
+            
+            # 添加曲線名稱
+            custom_curve_name = st.text_input("曲線名稱 | Curve Name", "上傳的曲線 | Uploaded Curve")
+            pump_model = custom_curve_name
+    except Exception as e:
+        st.error(f"處理文件時出錯: {e} | Error processing file: {e}")
+        curve_data = None
+
+# 如果沒有上傳文件或處理出錯，則生成模型數據
+if curve_data is None:
+    curve_data = generate_pump_curve(
+        pump_model, 
+        flow_unit, 
+        head_unit
+    )
+
+# 如果是自定義模式且沒有上傳文件，提供數據輸入界面
+if pump_model.startswith("自定") and uploaded_file is None:
     st.subheader("輸入自定義泵曲線數據 | Enter Custom Pump Curve Data")
     
     col1, col2 = st.columns(2)
@@ -155,6 +229,117 @@ st.subheader("泵曲線圖 | Pump Curve Chart")
 # 使用Plotly創建交互式圖表
 fig = go.Figure()
 
+# 為圖表添加多個X軸和Y軸，類似於原始圖片
+# 主軸為預設單位
+fig.update_layout(
+    xaxis=dict(
+        title=f"流量 | Flow ({flow_unit})",
+        side="bottom",
+        anchor="y",
+    ),
+    yaxis=dict(
+        title=f"揚程 | Head ({head_unit})",
+        side="left",
+        anchor="x",
+    )
+)
+
+# 添加第二個X軸（如果主軸不是LPM）
+if flow_unit != "LPM":
+    fig.update_layout(
+        xaxis2=dict(
+            title="流量 | Flow (LPM)",
+            side="bottom",
+            anchor="y",
+            overlaying="x",
+            position=0.05,
+            showgrid=False,
+        )
+    )
+
+# 添加第三個X軸（如果主軸不是GPM）
+if flow_unit != "GPM":
+    fig.update_layout(
+        xaxis3=dict(
+            title="流量 | Flow (GPM)",
+            side="bottom",
+            anchor="y",
+            overlaying="x",
+            position=0.1,
+            showgrid=False,
+        )
+    )
+
+# 添加第四個X軸（如果主軸不是m³/hr）
+if flow_unit != "m³/hr":
+    fig.update_layout(
+        xaxis4=dict(
+            title="流量 | Flow (m³/hr)",
+            side="bottom",
+            anchor="y",
+            overlaying="x",
+            position=0.15,
+            showgrid=False,
+        )
+    )
+
+# 添加第二個Y軸（如果主軸不是米）
+if head_unit != "米 (m)":
+    fig.update_layout(
+        yaxis2=dict(
+            title="揚程 | Head (m)",
+            side="left",
+            anchor="x",
+            overlaying="y",
+            position=0.05,
+            showgrid=False,
+        )
+    )
+
+# 添加第三個Y軸（如果主軸不是英尺）
+if head_unit != "英尺 (ft)":
+    fig.update_layout(
+        yaxis3=dict(
+            title="揚程 | Head (ft)",
+            side="left",
+            anchor="x",
+            overlaying="y",
+            position=0.1,
+            showgrid=False,
+        )
+    )
+
+# 單位轉換函數
+def convert_units(data, from_flow, to_flow, from_head, to_head):
+    converted = data.copy()
+    
+    # 流量單位轉換
+    if from_flow != to_flow:
+        if from_flow == "LPM":
+            if to_flow == "GPM":
+                converted["Flow"] = data["Flow"] * 0.26417
+            elif to_flow == "m³/hr":
+                converted["Flow"] = data["Flow"] * 0.06
+        elif from_flow == "GPM":
+            if to_flow == "LPM":
+                converted["Flow"] = data["Flow"] / 0.26417
+            elif to_flow == "m³/hr":
+                converted["Flow"] = data["Flow"] * 0.227125
+        elif from_flow == "m³/hr":
+            if to_flow == "LPM":
+                converted["Flow"] = data["Flow"] / 0.06
+            elif to_flow == "GPM":
+                converted["Flow"] = data["Flow"] / 0.227125
+    
+    # 揚程單位轉換
+    if from_head != to_head:
+        if (from_head == "米 (m)" and to_head == "英尺 (ft)"):
+            converted["Head"] = data["Head"] * 3.28084
+        elif (from_head == "英尺 (ft)" and to_head == "米 (m)"):
+            converted["Head"] = data["Head"] / 3.28084
+    
+    return converted
+
 # 添加主曲線
 fig.add_trace(go.Scatter(
     x=curve_data["Flow"],
@@ -175,18 +360,89 @@ for model in compare_models:
         line=dict(width=2, dash='dash')
     ))
 
+# 添加網格線
+fig.update_layout(
+    plot_bgcolor='white',
+    xaxis=dict(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='lightgray',
+        zeroline=True,
+        zerolinewidth=2,
+        zerolinecolor='gray'
+    ),
+    yaxis=dict(
+        showgrid=True,
+        gridwidth=1,
+        gridcolor='lightgray',
+        zeroline=True,
+        zerolinewidth=2,
+        zerolinecolor='gray'
+    )
+)
+
 # 設置圖表佈局
 fig.update_layout(
     title=f'泵性能曲線 | Pump Performance Curve ({frequency})',
-    xaxis_title=f'流量 | Flow ({flow_unit})',
-    yaxis_title=f'揚程 | Head ({head_unit})',
     legend_title="泵型號 | Pump Model",
     height=600,
-    hovermode="closest"
+    hovermode="closest",
+    margin=dict(t=100, b=100)  # 增加上下邊距，為多軸留出空間
 )
+
+# 添加DS型號標籤，類似於原圖
+for i, model_name in enumerate(["DS-05", "DS-10", "DS-20", "DS-30"]):
+    if model_name in [pump_model] + compare_models:
+        # 找到相應曲線的中點位置來放置標籤
+        if model_name == pump_model:
+            data = curve_data
+        else:
+            data = generate_pump_curve(model_name, flow_unit, head_unit)
+        
+        if len(data) > 1:
+            # 找到曲線的中點位置
+            mid_idx = len(data) // 2
+            x_pos = data["Flow"].iloc[mid_idx]
+            y_pos = data["Head"].iloc[mid_idx]
+            
+            # 添加標籤
+            fig.add_annotation(
+                x=x_pos,
+                y=y_pos,
+                text=model_name,
+                showarrow=False,
+                font=dict(size=14, color="black"),
+                bgcolor="white",
+                opacity=0.8
+            )
 
 # 顯示圖表
 st.plotly_chart(fig, use_container_width=True)
+
+# 創建並顯示表格，包含所有單位
+st.subheader("泵曲線數據（全部單位）| Pump Curve Data (All Units)")
+
+# 創建包含所有單位的數據表
+all_units_data = pd.DataFrame()
+
+# 添加原始數據
+all_units_data[f"流量 | Flow ({flow_unit})"] = curve_data["Flow"]
+all_units_data[f"揚程 | Head ({head_unit})"] = curve_data["Head"]
+
+# 添加其他流量單位
+for unit in ["LPM", "GPM", "m³/hr"]:
+    if unit != flow_unit:
+        converted = convert_units(curve_data, flow_unit, unit, head_unit, head_unit)
+        all_units_data[f"流量 | Flow ({unit})"] = converted["Flow"]
+
+# 添加其他揚程單位
+for unit in ["米 (m)", "英尺 (ft)"]:
+    if unit != head_unit:
+        converted = convert_units(curve_data, flow_unit, flow_unit, head_unit, unit)
+        all_units_data[f"揚程 | Head ({unit})"] = converted["Head"]
+
+# 顯示數據表
+st.dataframe(all_units_data.style.format("{:.2f}"))
 
 # 添加效率曲線選項（高級功能）
 st.subheader("高級功能 | Advanced Features")
@@ -355,39 +611,106 @@ st.subheader("導出數據 | Export Data")
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("下載數據為CSV | Download Data as CSV"):
-        csv = curve_data.to_csv(index=False)
+    # 下載全部單位的數據
+    if st.button("下載數據為CSV（全部單位）| Download Data with All Units as CSV"):
+        csv = all_units_data.to_csv(index=False)
         st.download_button(
-            label="點擊下載CSV | Click to Download CSV",
+            label="點擊下載所有單位CSV | Click to Download All Units CSV",
             data=csv,
-            file_name=f"{pump_model}_data.csv",
+            file_name=f"{pump_model}_all_units_data.csv",
             mime="text/csv"
         )
 
 with col2:
-    if st.button("下載圖表為PNG | Download Chart as PNG"):
-        st.info("在實際應用中，這裏應該提供圖表下載功能。在這個示例中，您可以使用Plotly圖表右上角的相機圖標來下載圖表。")
+    # 下載僅當前單位的數據
+    if st.button("下載數據為CSV（當前單位）| Download Data with Current Units as CSV"):
+        csv = curve_data.to_csv(index=False)
+        st.download_button(
+            label="點擊下載當前單位CSV | Click to Download Current Units CSV",
+            data=csv,
+            file_name=f"{pump_model}_current_units_data.csv",
+            mime="text/csv"
+        )
+
+# 添加曲線數據的CSV模板下載
+st.subheader("CSV模板 | CSV Template")
+st.write("如果您想準備自己的CSV文件上傳，可以先下載此模板 | If you want to prepare your own CSV file for upload, you can download this template first")
+
+# 創建模板數據
+template_data = pd.DataFrame({
+    "Flow_LPM": [0, 100, 200, 300, 400, 500],
+    "Head_m": [25, 20, 15, 10, 5, 2]
+})
+
+# 提供模板下載
+csv_template = template_data.to_csv(index=False)
+st.download_button(
+    label="下載CSV模板 | Download CSV Template",
+    data=csv_template,
+    file_name="pump_curve_template.csv",
+    mime="text/csv"
+)
+
+# 添加圖表導出功能（使用Plotly的內置功能）
+st.info("要下載圖表為PNG或SVG格式，請使用Plotly圖表右上角的相機圖標 | To download the chart as PNG or SVG, use the camera icon in the top right corner of the Plotly chart")
+
+# 添加CSV格式說明
+st.subheader("CSV文件格式說明 | CSV File Format Instructions")
+st.markdown("""
+為了成功上傳您的泵曲線數據，請確保您的CSV文件符合以下格式要求：
+
+1. 文件應該至少包含兩列數據：一列用於流量值，一列用於揚程值
+2. 文件必須包含標題行（列名）
+3. 數據應該按照流量升序或降序排列
+4. 數值應該使用小數點（.）作為小數分隔符
+5. 不應該包含單位符號，只有數字
+6. 不應該有空值
+
+**示例CSV內容：**
+```
+Flow_LPM,Head_m
+0,30
+100,25
+200,15
+300,8
+400,3
+```
+
+上傳後，您可以在界面中選擇哪一列代表流量，哪一列代表揚程。
+""")
 
 # 添加說明信息
 st.markdown("""
 ---
 ### 使用說明 | Usage Instructions
 
-1. 在側邊欄選擇泵型號、頻率和單位
-2. 查看生成的泵曲線圖
-3. 可選: 添加其他泵型號進行比較
-4. 可選: 設置系統參數計算工作點
-5. 下載數據或圖表供後續使用
+1. **基本功能：**
+   - 在側邊欄選擇泵型號、頻率和單位
+   - 查看生成的泵曲線圖（包含所有單位）
+   - 添加其他泵型號進行比較
+
+2. **自定義數據：**
+   - 上傳自己的CSV文件
+   - 或使用自定義模式手動輸入數據點
+
+3. **工作點計算：**
+   - 設置系統參數計算工作點
+   - 查看泵與系統曲線的交點
+
+4. **數據導出：**
+   - 下載包含所有單位或當前單位的CSV數據
+   - 使用Plotly工具下載圖表為PNG或SVG格式
 
 ---
 ### 注意事項 | Notes
 
-- 本工具使用的數據是模擬數據，實際應用中應使用製造商提供的正確參數
+- 本工具顯示的所有單位轉換是基於標準公式計算，可能與實際製造商數據有微小差異
 - 計算結果僅供參考，實際設計應諮詢專業工程師
-- 如需更精確的結果，請輸入更多的數據點
+- 上傳的CSV文件不應超過1MB大小
+- 使用高質量的數據點以獲得更平滑、更準確的曲線
 
 ---
 """)
 
 # 添加頁腳
-st.markdown("© 2025 泵曲線繪製工具 | Pump Curve Plotting Tool")
+st.markdown("© 2025 泵曲線繪製工具 | Pump Curve Plotting Tool | Created with Streamlit")
