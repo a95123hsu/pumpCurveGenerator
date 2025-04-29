@@ -22,6 +22,11 @@ def main():
             'show_system_curve': False,
             'static_head': 2.0,
             'k_factor': 0.0001,
+            'max_flow': None,  # Auto-scale by default
+            'max_head': None,  # Auto-scale by default
+            'min_flow': 0,     # Start at 0 by default
+            'min_head': 0,     # Start at 0 by default
+            'show_grid': True, # Show grid by default
         }
     
     # Initialize input reset key if it doesn't exist
