@@ -7,6 +7,11 @@ import base64
 from matplotlib.ticker import MaxNLocator, AutoMinorLocator
 
 def main():
+    # Create a function to auto-update chart when configuration changes
+    def update_chart_on_config_change():
+        if st.session_state.current_df is not None and st.session_state.chart_generated:
+            st.experimental_rerun()
+
     st.set_page_config(page_title="Pump Curve Generator", layout="wide")
     
     st.title("Pump Curve Generator Tool")
@@ -49,23 +54,25 @@ def main():
     tab1, tab2 = st.tabs(["Create Pump Curves", "About Pump Curves"])
     
     with tab1:
-        # MOVED CHART CONFIGURATION TO APPEAR BEFORE DATA INPUT
         # Configuration options
         st.subheader("Chart Configuration")
         
         # Create columns for chart options
         col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
         
-        # When any option changes, immediately update session state
+        # When any option changes, immediately update session state and trigger chart refresh
         with col_a:
             frequency = st.selectbox(
                 "Frequency (Hz)", 
                 [50, 60], 
                 index=[50, 60].index(st.session_state.chart_params['frequency']),
                 key="frequency_select",
-                on_change=lambda: setattr(
-                    st.session_state, 'chart_params', 
-                    {**st.session_state.chart_params, 'frequency': st.session_state.frequency_select}
+                on_change=lambda: (
+                    setattr(
+                        st.session_state, 'chart_params', 
+                        {**st.session_state.chart_params, 'frequency': st.session_state.frequency_select}
+                    ),
+                    update_chart_on_config_change()
                 )
             )
         
@@ -75,9 +82,12 @@ def main():
                 ["Modern", "Classic"], 
                 index=["Modern", "Classic"].index(st.session_state.chart_params['chart_style']),
                 key="chart_style_select",
-                on_change=lambda: setattr(
-                    st.session_state, 'chart_params', 
-                    {**st.session_state.chart_params, 'chart_style': st.session_state.chart_style_select}
+                on_change=lambda: (
+                    setattr(
+                        st.session_state, 'chart_params', 
+                        {**st.session_state.chart_params, 'chart_style': st.session_state.chart_style_select}
+                    ),
+                    update_chart_on_config_change()
                 )
             )
         
@@ -86,9 +96,12 @@ def main():
                 "Show System Curve", 
                 value=st.session_state.chart_params['show_system_curve'],
                 key="system_curve_checkbox",
-                on_change=lambda: setattr(
-                    st.session_state, 'chart_params', 
-                    {**st.session_state.chart_params, 'show_system_curve': st.session_state.system_curve_checkbox}
+                on_change=lambda: (
+                    setattr(
+                        st.session_state, 'chart_params', 
+                        {**st.session_state.chart_params, 'show_system_curve': st.session_state.system_curve_checkbox}
+                    ),
+                    update_chart_on_config_change()
                 )
             )
         
@@ -97,9 +110,12 @@ def main():
                 "Show Grid", 
                 value=st.session_state.chart_params['show_grid'],
                 key="show_grid_checkbox",
-                on_change=lambda: setattr(
-                    st.session_state, 'chart_params', 
-                    {**st.session_state.chart_params, 'show_grid': st.session_state.show_grid_checkbox}
+                on_change=lambda: (
+                    setattr(
+                        st.session_state, 'chart_params', 
+                        {**st.session_state.chart_params, 'show_grid': st.session_state.show_grid_checkbox}
+                    ),
+                    update_chart_on_config_change()
                 )
             )
         
@@ -113,9 +129,12 @@ def main():
                     value=st.session_state.chart_params['static_head'], 
                     step=0.5,
                     key="static_head_input",
-                    on_change=lambda: setattr(
-                        st.session_state, 'chart_params', 
-                        {**st.session_state.chart_params, 'static_head': st.session_state.static_head_input}
+                    on_change=lambda: (
+                        setattr(
+                            st.session_state, 'chart_params', 
+                            {**st.session_state.chart_params, 'static_head': st.session_state.static_head_input}
+                        ),
+                        update_chart_on_config_change()
                     )
                 )
             
@@ -127,9 +146,12 @@ def main():
                     format="%.6f", 
                     step=0.00001,
                     key="k_factor_input",
-                    on_change=lambda: setattr(
-                        st.session_state, 'chart_params', 
-                        {**st.session_state.chart_params, 'k_factor': st.session_state.k_factor_input}
+                    on_change=lambda: (
+                        setattr(
+                            st.session_state, 'chart_params', 
+                            {**st.session_state.chart_params, 'k_factor': st.session_state.k_factor_input}
+                        ),
+                        update_chart_on_config_change()
                     )
                 )
         
@@ -144,9 +166,12 @@ def main():
                 value=float(st.session_state.chart_params['min_flow'] or 0.0), 
                 step=10.0,
                 key="min_flow_input",
-                on_change=lambda: setattr(
-                    st.session_state, 'chart_params', 
-                    {**st.session_state.chart_params, 'min_flow': st.session_state.min_flow_input}
+                on_change=lambda: (
+                    setattr(
+                        st.session_state, 'chart_params', 
+                        {**st.session_state.chart_params, 'min_flow': st.session_state.min_flow_input}
+                    ),
+                    update_chart_on_config_change()
                 )
             )
             
@@ -161,9 +186,12 @@ def main():
                 value=float(max_flow_value or 0.0), 
                 step=100.0,
                 key="max_flow_input",
-                on_change=lambda: setattr(
-                    st.session_state, 'chart_params', 
-                    {**st.session_state.chart_params, 'max_flow': st.session_state.max_flow_input if st.session_state.max_flow_input > 0 else None}
+                on_change=lambda: (
+                    setattr(
+                        st.session_state, 'chart_params', 
+                        {**st.session_state.chart_params, 'max_flow': st.session_state.max_flow_input if st.session_state.max_flow_input > 0 else None}
+                    ),
+                    update_chart_on_config_change()
                 )
             )
             
@@ -174,9 +202,12 @@ def main():
                 value=float(st.session_state.chart_params['min_head'] or 0.0), 
                 step=1.0,
                 key="min_head_input",
-                on_change=lambda: setattr(
-                    st.session_state, 'chart_params', 
-                    {**st.session_state.chart_params, 'min_head': st.session_state.min_head_input}
+                on_change=lambda: (
+                    setattr(
+                        st.session_state, 'chart_params', 
+                        {**st.session_state.chart_params, 'min_head': st.session_state.min_head_input}
+                    ),
+                    update_chart_on_config_change()
                 )
             )
             
@@ -191,9 +222,12 @@ def main():
                 value=float(max_head_value or 0.0), 
                 step=1.0,
                 key="max_head_input",
-                on_change=lambda: setattr(
-                    st.session_state, 'chart_params', 
-                    {**st.session_state.chart_params, 'max_head': st.session_state.max_head_input if st.session_state.max_head_input > 0 else None}
+                on_change=lambda: (
+                    setattr(
+                        st.session_state, 'chart_params', 
+                        {**st.session_state.chart_params, 'max_head': st.session_state.max_head_input if st.session_state.max_head_input > 0 else None}
+                    ),
+                    update_chart_on_config_change()
                 )
             )
         
@@ -245,7 +279,7 @@ def main():
                     except Exception as e:
                         st.error(f"Error generating chart: {e}")
                 else:
-                    st.info("click generate button to generate the curve again")
+                    st.info("Click Generate Chart to create the pump curve.")
             
             with col2:
                 st.subheader("Pump Curve Data")
@@ -299,29 +333,69 @@ def handle_csv_upload():
     # File uploader
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
     
-    # Sample CSV template for download
+    # Sample CSV template for download - Using head values as primary axis
     sample_data = pd.DataFrame({
-        'Flow (LPM)': [0, 100, 200, 300, 400, 500, 600, 700, 800],
-        'DS-05 Head (m)': [7.5, 7.3, 7.0, 6.5, 5.8, 5.0, 4.0, 2.5, 0.8],
-        'DS-10 Head (m)': [8.5, 8.3, 8.0, 7.5, 7.0, 6.5, 5.5, 4.2, 2.5],
-        'DS-20 Head (m)': [9.3, 9.1, 8.8, 8.5, 8.0, 7.5, 7.0, 6.0, 4.5],
-        'DS-30 Head (m)': [9.8, 9.6, 9.4, 9.0, 8.5, 8.0, 7.5, 6.5, 5.0]
+        'Head (ft)': [4.8, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 49.8],
+        'Model-A Flow (GPM)': [90.09, 89.96, 84.81, 77.43, 69.85, 61.89, 53.93, 41.81, 29.34, 18.52, 8.45],
+        'Model-B Flow (GPM)': [105.50, 104.75, 95.22, 86.34, 78.43, 69.45, 60.76, 48.45, 35.21, 21.93, 11.24]
     })
     
     st.markdown("### Download Sample CSV Template")
     
-    csv = sample_data.to_csv(index=False)
-    b64 = base64.b64encode(csv.encode()).decode()
-    href = f'<a href="data:file/csv;base64,{b64}" download="pump_curve_template.csv">Download Sample Template</a>'
-    st.markdown(href, unsafe_allow_html=True)
+    # Create template
+    csv_standard = sample_data.to_csv(index=False)
+    b64_standard = base64.b64encode(csv_standard.encode()).decode()
+    href_standard = f'<a href="data:file/csv;base64,{b64_standard}" download="pump_curve_template.csv">Download CSV Template</a>'
+    
+    st.markdown(href_standard, unsafe_allow_html=True)
     
     if uploaded_file is not None:
         try:
             df = pd.read_csv(uploaded_file)
             
+            # Transform the data into format needed for plotting (Head vs Flow)
+            # Need to transpose it for the traditional pump curve format expected by the plotting function
+            
+            # Check if data is in Head-first, Flow-second format
+            if 'Head' in df.columns[0]:
+                st.info("Converting Head-Flow format to standard format for pump curve generation.")
+                
+                # Extract head values and units
+                head_col = df.columns[0]
+                head_unit = head_col.split('(')[-1].split(')')[0]
+                head_values = df[head_col].values
+                
+                # Create new DataFrame in the format needed for plotting
+                transformed_df = pd.DataFrame()
+                
+                # Find all flow columns and add them to the transformed DF
+                flow_cols = [col for col in df.columns if 'Flow' in col]
+                if not flow_cols:
+                    st.warning("No flow columns detected. Please ensure your CSV has column names like 'Model-X Flow (GPM)'")
+                    return None
+                
+                # Extract flow unit from first flow column
+                flow_unit = flow_cols[0].split('(')[-1].split(')')[0]
+                
+                # For each model's flow, create a new column with the head values
+                for flow_col in flow_cols:
+                    model_name = flow_col.split(' ')[0]  # Extract model name
+                    flow_values = df[flow_col].values
+                    
+                    # Add to new dataframe in the format needed for plotting
+                    if len(transformed_df) == 0:
+                        # First model, initialize with flow column
+                        transformed_df[f'Flow ({flow_unit})'] = flow_values
+                    
+                    # Add head column for this model
+                    transformed_df[f'{model_name} Head ({head_unit})'] = head_values
+                
+                df = transformed_df
+            
             # Basic validation
-            if 'Flow' not in df.columns[0]:
-                st.warning("First column should contain flow values (LPM, m³/h, or GPM)")
+            if not any('Flow' in col for col in df.columns):
+                st.warning("No Flow column detected. Please ensure your CSV has at least one Flow column.")
+                return None
             
             # Automatically set chart_generated to True when a file is uploaded
             st.session_state.chart_generated = True
@@ -350,67 +424,138 @@ def handle_manual_input():
         # Units selection
         col1, col2 = st.columns(2)
         with col1:
-            flow_unit = st.selectbox("Flow Rate Unit", ["LPM", "m³/h", "GPM"], 
+            flow_unit = st.selectbox("Flow Rate Unit", ["GPM", "LPM", "m³/h"], 
                                    key=f"flow_unit_{st.session_state.input_reset_key}")
         with col2:
-            head_unit = st.selectbox("Head Unit", ["m", "ft"], 
+            head_unit = st.selectbox("Head Unit", ["ft", "m"], 
                                    key=f"head_unit_{st.session_state.input_reset_key}")
         
         # Number of pump models
-        num_models = st.number_input("Number of Pump Models", min_value=1, max_value=5, value=1,
+        num_models = st.number_input("Number of Pump Models", min_value=1, max_value=5, value=2,
                                    key=f"num_models_{st.session_state.input_reset_key}")
         
         # Model names
         model_names = []
         cols = st.columns(min(num_models, 5))
         for i, col in enumerate(cols):
-            model_name = col.text_input(f"Model {i+1} Name", value=f"DS-{(i+1)*10}",
+            model_name = col.text_input(f"Model {i+1} Name", value=f"Model-{chr(65+i)}",
                                       key=f"model_name_{i}_{st.session_state.input_reset_key}")
             model_names.append(model_name)
         
-        # Number of data points
-        num_points = st.number_input("Number of Data Points", min_value=3, max_value=20, value=8,
-                                   key=f"num_points_{st.session_state.input_reset_key}")
+        # Option to use template data
+        use_template = st.checkbox("Use Template Data", value=True,
+                                 key=f"use_template_{st.session_state.input_reset_key}")
         
-        # Create an empty dataframe for input
+        if use_template:
+            # Use the data provided by the user - common head values for all models
+            num_points = 11
+            template_head = [4.8, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 49.8]
+            
+            # Flow values for the first model
+            template_flow_model_A = [90.09, 89.96, 84.81, 77.43, 69.85, 61.89, 53.93, 41.81, 29.34, 18.52, 8.45]
+            
+            # Pre-calculate flow values for other models (increased capacity)
+            template_flow_models = {}
+            for i, model in enumerate(model_names):
+                if i == 0:
+                    template_flow_models[model] = template_flow_model_A
+                else:
+                    # Each subsequent model has slightly higher flow at same head points
+                    multiplier = 1.0 + (0.15 * i)  # 15% increase for each model
+                    template_flow_models[model] = [flow * multiplier for flow in template_flow_model_A]
+        else:
+            # Number of data points
+            num_points = st.number_input("Number of Data Points", min_value=3, max_value=20, value=8,
+                                      key=f"num_points_{st.session_state.input_reset_key}")
+            
+            # Generate default head values (common for all models)
+            template_head = np.linspace(5.0, 50.0, num_points).tolist()
+            
+            # Generate flow values for each model
+            template_flow_models = {}
+            base_flow = 90.0  # Starting flow for first model
+            
+            for i, model in enumerate(model_names):
+                # Generate decreasing flow as head increases
+                max_flow = base_flow * (1.0 + 0.15 * i)  # Increase capacity for each model
+                min_flow = max_flow * 0.1  # End at 10% of max flow
+                flows = np.linspace(max_flow, min_flow, num_points).tolist()
+                template_flow_models[model] = flows
+        
+        # Transform the data into standard "Flow vs. Head" format for plotting
         columns = [f'Flow ({flow_unit})']
         for name in model_names:
             columns.append(f"{name} Head ({head_unit})")
         
-        # Create default data
-        data = {}
-        data[columns[0]] = [i*100 for i in range(num_points)]
+        # Start with empty dataframe
+        transformed_data = pd.DataFrame()
         
-        for col in columns[1:]:
-            # Create descending values for the head
-            max_head = 10.0
-            min_head = 4.0
-            step = (max_head - min_head) / (num_points - 1)
-            data[col] = [max_head - i*step for i in range(num_points)]
-        
-        df = pd.DataFrame(data)
+        # For each model, create a separate row in the transformed dataframe
+        for i, model in enumerate(model_names):
+            # Create flow column for this model
+            if i == 0:
+                # First model sets up the flow column
+                transformed_data[columns[0]] = template_flow_models[model]
+            
+            # All models share the same head values
+            transformed_data[f"{model} Head ({head_unit})"] = template_head
         
         # Create an editable table with a unique key
-        edited_df = st.data_editor(df, use_container_width=True, 
+        st.markdown("### Edit Pump Data Below")
+        st.info("Note: Common head values across all models. Adjust flow values for each model at the same head point.")
+        
+        # Display the original head-flow data for editing
+        head_flow_df = pd.DataFrame({
+            f'Head ({head_unit})': template_head
+        })
+        
+        # Add flow columns for each model
+        for model in model_names:
+            head_flow_df[f'{model} Flow ({flow_unit})'] = template_flow_models[model]
+        
+        edited_df = st.data_editor(head_flow_df, use_container_width=True, 
                                   num_rows="fixed", 
-                                  height=min(400, 50 + 35*num_points),
+                                  height=min(500, 70 + 40*num_points),
                                   key=f"data_editor_{st.session_state.input_reset_key}")
         
         # Submit button
         col1, col2 = st.columns(2)
         with col1:
-            submitted = st.form_submit_button("Submit Data")
+            submitted = st.form_submit_button("Generate Pump Curve")
         with col2:
             # Add a refresh button inside the form
             refresh_data = st.form_submit_button("Refresh Form")
         
         if submitted:
+            # Transform the edited data back into the format needed for plotting
+            transformed_df = pd.DataFrame()
+            
+            # Extract data from the edited dataframe
+            head_col = edited_df.columns[0]
+            head_values = edited_df[head_col].values
+            
+            # Get flow columns
+            flow_cols = [col for col in edited_df.columns if 'Flow' in col]
+            
+            # For each model, create a row in the transformed dataframe
+            for i, flow_col in enumerate(flow_cols):
+                model_name = flow_col.split(' ')[0]  # Extract model name
+                flow_values = edited_df[flow_col].values
+                
+                # Add to new dataframe in the format needed for plotting
+                if i == 0:
+                    # First model, initialize with flow column
+                    transformed_df[f'Flow ({flow_unit})'] = flow_values
+                
+                # Add head column for this model
+                transformed_df[f'{model_name} Head ({head_unit})'] = head_values
+            
             # Automatically generate the chart when data is submitted
             st.session_state.chart_generated = True
-            return edited_df
+            return transformed_df
         elif refresh_data:
             # Just return the current data to update the form
-            return edited_df
+            return None
     
     return None
 
@@ -480,6 +625,14 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
                 # Plot operating point
                 ax.plot(op_flow, op_head, 'o', markersize=8, 
                         color=colors[list(head_cols).index(column) % len(colors)])
+                
+                # Add operating point annotation
+                ax.annotate(f"({op_flow:.1f}, {op_head:.1f})",
+                           xy=(op_flow, op_head),
+                           xytext=(10, 10),
+                           textcoords='offset points',
+                           color=colors[list(head_cols).index(column) % len(colors)],
+                           fontweight='bold')
     
     # Set up the primary x and y axes
     ax.set_xlabel(f'Flow ({flow_unit})', fontsize=12, fontweight='bold')
@@ -518,32 +671,45 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
     else:
         ax.set_ylim(bottom=float(min_head), top=float(max_head))
     
-    # Add secondary x-axis for alternative flow units if primary is LPM
+    # Add secondary x-axis for alternative flow units if primary is not already in those units
     if flow_unit == "LPM":
-        # Add m³/h axis at bottom with less spacing (closer to main axis)
+        # Add m³/h axis at bottom
         ax_m3h = ax.secondary_xaxis(-0.15, functions=(lambda x: x/60, lambda x: x*60))
-        # Limit ticks to prevent overcrowding
         ax_m3h.xaxis.set_major_locator(MaxNLocator(7))
-        # Format to 1 decimal place
         ax_m3h.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
         ax_m3h.set_xlabel(f'Flow (m³/h)', fontsize=12, fontweight='bold', labelpad=10)
         
-        # Add GPM axis below with adjusted spacing
+        # Add GPM axis below
         ax_gpm = ax.secondary_xaxis(-0.30, functions=(lambda x: x*0.264172, lambda x: x/0.264172))
-        # Limit ticks and format
         ax_gpm.xaxis.set_major_locator(MaxNLocator(7))
         ax_gpm.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
         ax_gpm.set_xlabel(f'Flow (GPM)', fontsize=12, fontweight='bold', labelpad=10)
+    elif flow_unit == "GPM":
+        # Add LPM axis
+        ax_lpm = ax.secondary_xaxis(-0.15, functions=(lambda x: x*3.78541, lambda x: x/3.78541))
+        ax_lpm.xaxis.set_major_locator(MaxNLocator(7))
+        ax_lpm.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
+        ax_lpm.set_xlabel(f'Flow (LPM)', fontsize=12, fontweight='bold', labelpad=10)
+        
+        # Add m³/h axis
+        ax_m3h = ax.secondary_xaxis(-0.30, functions=(lambda x: x*0.227125, lambda x: x/0.227125))
+        ax_m3h.xaxis.set_major_locator(MaxNLocator(7))
+        ax_m3h.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
+        ax_m3h.set_xlabel(f'Flow (m³/h)', fontsize=12, fontweight='bold', labelpad=10)
     
-    # Add secondary y-axis for alternative head units if primary is m
+    # Add secondary y-axis for alternative head units
     if head_unit == "m":
-        # Position the ft axis closer to the chart (1.05 instead of 1.18)
+        # Position the ft axis
         ax_ft = ax.secondary_yaxis(1.05, functions=(lambda x: x*3.28084, lambda x: x/3.28084))
-        # Limit ticks and format
         ax_ft.yaxis.set_major_locator(MaxNLocator(7))
         ax_ft.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
-        # Position the label farther from the axis
         ax_ft.set_ylabel(f'Head (ft)', fontsize=12, fontweight='bold', labelpad=15)
+    elif head_unit == "ft":
+        # Position the meters axis
+        ax_m = ax.secondary_yaxis(1.05, functions=(lambda x: x/3.28084, lambda x: x*3.28084))
+        ax_m.yaxis.set_major_locator(MaxNLocator(7))
+        ax_m.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
+        ax_m.set_ylabel(f'Head (m)', fontsize=12, fontweight='bold', labelpad=15)
     
     # Add frequency information
     plt.text(0.05, 0.95, f"{frequency}Hz", 
@@ -551,8 +717,8 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
              fontsize=14, 
              bbox=dict(facecolor='white', alpha=0.7, boxstyle='round'))
     
-    # Remove the legend since we're adding labels directly to the curves
-    # ax.legend(loc='upper right', fontsize=10, framealpha=0.7)
+    # Add legend with model names
+    ax.legend(loc='upper right', fontsize=10, framealpha=0.7)
     
     plt.title('Pump Performance Curves', fontsize=16, fontweight='bold', pad=20)
     plt.tight_layout()
