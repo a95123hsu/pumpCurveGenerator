@@ -11,14 +11,26 @@ def main():
     
     st.title("Pump Curve Generator Tool")
     
-    # Initialize session state for tracking changes
+    # Initialize session state for tracking changes and storing persistent data
     if 'refresh_counter' not in st.session_state:
         st.session_state.refresh_counter = 0
-        st.session_state.last_config = {}
+    
+    if 'chart_params' not in st.session_state:
+        st.session_state.chart_params = {
+            'frequency': 50,
+            'chart_style': "Modern",
+            'show_system_curve': False,
+            'static_head': 2.0,
+            'k_factor': 0.0001,
+        }
     
     # Initialize input reset key if it doesn't exist
     if 'input_reset_key' not in st.session_state:
         st.session_state.input_reset_key = 0
+    
+    # Initialize data storage
+    if 'current_df' not in st.session_state:
+        st.session_state.current_df = None
     
     st.markdown("""
     This tool allows you to generate pump performance curves similar to manufacturer specifications.
