@@ -217,8 +217,13 @@ def main():
             col1, col2 = st.columns([3, 1])
             
             with col1:
+                # For CSV uploads, automatically set chart_generated to True
+                if input_method == "Upload CSV" and not st.session_state.chart_generated:
+                    st.session_state.chart_generated = True
+                
                 # Add refresh button
-                if st.button("Generate/Refresh Chart", key="refresh_chart_button"):
+                refresh_button = st.button("Refresh Chart", key="refresh_chart_button")
+                if refresh_button:
                     st.session_state.chart_generated = True
                 
                 # Generate curve using parameters from session state
@@ -242,7 +247,7 @@ def main():
                     # Add download button for the plot
                     download_button_for_plot(fig)
                 else:
-                    st.info("Click 'Generate/Refresh Chart' to create the pump curve with your current configuration settings.")
+                    st.info("Click 'Refresh Chart' to update the pump curve with your current configuration settings.")
             
             with col2:
                 st.subheader("Pump Curve Data")
@@ -319,6 +324,9 @@ def handle_csv_upload():
             # Basic validation
             if 'Flow' not in df.columns[0]:
                 st.warning("First column should contain flow values (LPM, m³/h, or GPM)")
+            
+            # Automatically set chart_generated to True when a file is uploaded
+            st.session_state.chart_generated = True
                 
             return df
         except Exception as e:
@@ -399,8 +407,8 @@ def handle_manual_input():
             refresh_data = st.form_submit_button("Refresh Form")
         
         if submitted:
-            # Mark that we need to generate the chart
-            st.session_state.chart_generated = False
+            # Automatically generate the chart when data is submitted
+            st.session_state.chart_generated = True
             return edited_df
         elif refresh_data:
             # Just return the current data to update the form
