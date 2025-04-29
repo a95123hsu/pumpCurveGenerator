@@ -1,566 +1,220 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
+import matplotlib.patches as patches
+from matplotlib.lines import Line2D
 import io
-from PIL import Image
-import base64
 
-st.set_page_config(page_title="泵浦曲線繪製工具", layout="wide")
+# 頁面設置
+st.set_page_config(page_title="泵浦曲線圖匹配器", layout="wide")
 
-st.title("泵浦曲線繪製工具 (Pump Curve Chart Generator)")
-st.markdown("這個應用程序可以幫助您繪製多條泵浦性能曲線，並可導出為圖像。")
-
-# 單位轉換函數
-def convert_flow(value, from_unit, to_unit):
-    # 先轉換到GPM作為標準單位
-    if from_unit == "GPM":
-        gpm = value
-    elif from_unit == "LPM":
-        gpm = value / 3.78541
-    elif from_unit == "M3/HR":
-        gpm = value * 4.40287
-
-    # 從GPM轉換到目標單位
-    if to_unit == "GPM":
-        return gpm
-    elif to_unit == "LPM":
-        return gpm * 3.78541
-    elif to_unit == "M3/HR":
-        return gpm / 4.40287
-
-def convert_head(value, from_unit, to_unit):
-    if from_unit == to_unit:
-        return value
-    elif from_unit == "FT" and to_unit == "M":
-        return value * 0.3048
-    elif from_unit == "M" and to_unit == "FT":
-        return value / 0.3048
-
-# 側邊欄設置
-st.sidebar.header("圖表設置")
+# 標題
+st.title("泵浦曲線圖精確匹配器")
+st.markdown("此應用程序生成與範例圖片完全匹配的泵浦曲線圖")
 
 # 頻率設置
-frequency = st.sidebar.radio("頻率:", ["50Hz", "60Hz"], index=0)
+frequency = st.radio("頻率:", ["50Hz", "60Hz"], horizontal=True)
 
-# 多曲線設置
-st.sidebar.subheader("泵浦型號設置")
-num_models = st.sidebar.slider("泵浦型號數量", min_value=1, max_value=6, value=4)
-
-# 保存泵浦型號數據的字典
-pump_models = {}
-
-# 為每個泵浦型號創建輸入表單
-for i in range(num_models):
-    st.sidebar.markdown(f"**泵浦型號 {i+1}**")
-    model_name = st.sidebar.text_input(f"型號名稱 #{i+1}", value=f"DS-{(i+1)*5}" if i < 4 else f"Model-{i+1}")
-    
-    # 每個型號的數據點數量
-    num_points = st.sidebar.slider(f"型號 {i+1} 數據點數量", min_value=3, max_value=10, value=5, key=f"points_{i}")
-    
-    # 為此型號創建數據收集點
-    flow_data = []
-    head_data = []
-    
-    # 根據型號自動生成一些合理的默認值
-    max_flow = 300 * (i + 1)
-    max_head = 10 - (i * 0.5) if i < 5 else 7
-    
-    # 創建折疊區域以減少側邊欄空間
-    with st.sidebar.expander(f"編輯型號 {i+1} 數據點"):
-        for j in range(num_points):
-            # 計算默認值使曲線看起來合理
-            default_flow = max_flow * j / (num_points - 1)
-            # 使頭部曲線隨流量增加而下降
-            default_head = max_head * (1 - (j / (num_points - 1))**1.5)
-            
-            col1, col2 = st.columns(2)
-            flow = col1.number_input(
-                f"流量 {j+1}", 
-                value=float(default_flow),
-                key=f"flow_{i}_{j}"
-            )
-            head = col2.number_input(
-                f"揚程 {j+1}", 
-                value=float(default_head),
-                key=f"head_{i}_{j}"
-            )
-            
-            flow_data.append(flow)
-            head_data.append(head)
-    
-    # 保存此型號的數據到字典
-    pump_models[model_name] = {
-        "flow": flow_data,
-        "head": head_data,
-        "color": f"hsl({(i * 40) % 360}, 70%, 50%)"  # 為每個型號分配不同的顏色
+# 預設泵浦型號數據 - 精確匹配圖片中的曲線
+pump_models = {
+    "DS-30": {
+        "flow": [0, 100, 200, 300, 400, 500, 600, 700, 800, 900],
+        "head": [9.0, 8.9, 8.6, 8.0, 7.2, 6.2, 5.0, 3.7, 2.0, 0.3]
+    },
+    "DS-20": {
+        "flow": [0, 100, 200, 300, 400, 500, 600, 700],
+        "head": [7.5, 7.3, 7.0, 6.5, 5.5, 4.3, 2.8, 0.8]
+    },
+    "DS-10": {
+        "flow": [0, 50, 100, 150, 200, 250, 300, 350, 400],
+        "head": [6.0, 5.9, 5.7, 5.4, 4.9, 4.2, 3.3, 2.2, 0.8]
+    },
+    "DS-05": {
+        "flow": [0, 50, 100, 150, 175, 200, 220, 240],
+        "head": [4.2, 4.1, 3.8, 3.3, 2.9, 2.3, 1.6, 0.8]
     }
-
-# 輸入單位設置
-st.sidebar.subheader("單位設置")
-flow_unit = st.sidebar.selectbox("流量輸入單位:", ["LPM", "GPM", "M3/HR"], index=0)
-head_unit = st.sidebar.selectbox("揚程輸入單位:", ["M", "FT"], index=0)
-
-# 圖表外觀設置
-st.sidebar.subheader("圖表外觀")
-interpolate = st.sidebar.checkbox("使用平滑曲線", value=True)
-show_points = st.sidebar.checkbox("顯示數據點", value=False)
-enable_grid = st.sidebar.checkbox("顯示網格", value=True)
-show_legend = st.sidebar.checkbox("顯示圖例", value=True)
-
-# 輸出設置
-st.sidebar.subheader("輸出設置")
-chart_width = st.sidebar.slider("圖表寬度 (像素)", min_value=600, max_value=1200, value=900)
-chart_height = st.sidebar.slider("圖表高度 (像素)", min_value=400, max_value=1000, value=700)
-bg_color = st.sidebar.color_picker("背景顏色", "#FFFFFF")
-grid_color = st.sidebar.color_picker("網格顏色", "#CCCCCC")
-
-# 圖表區域設置
-chart_title = st.text_input("圖表標題", f"泵浦性能曲線 ({frequency})")
-
-# 創建多單位曲線圖
-fig = make_subplots(specs=[[{"secondary_y": True}]])
-
-# 添加每個泵浦型號的曲線
-for model_name, model_data in pump_models.items():
-    flow_original = np.array(model_data["flow"])
-    head_original = np.array(model_data["head"])
-    color = model_data["color"]
-    
-    # 添加原始數據點
-    if show_points:
-        fig.add_trace(
-            go.Scatter(
-                x=flow_original,
-                y=head_original,
-                mode='markers',
-                name=f'{model_name} 數據點',
-                marker=dict(size=8, color=color),
-                showlegend=False
-            ),
-            secondary_y=False
-        )
-    
-    # 添加曲線
-    if interpolate and len(flow_original) > 1:
-        # 生成平滑曲線用的更多X點
-        x_smooth = np.linspace(min(flow_original), max(flow_original), 100)
-        # 使用numpy的插值
-        y_smooth = np.interp(x_smooth, flow_original, head_original)
-        
-        fig.add_trace(
-            go.Scatter(
-                x=x_smooth,
-                y=y_smooth,
-                mode='lines',
-                name=model_name,
-                line=dict(color=color, width=3),
-                hovertemplate=f'{model_name}<br>流量: %{{x:.1f}} {flow_unit}<br>揚程: %{{y:.2f}} {head_unit}'
-            ),
-            secondary_y=False
-        )
-    else:
-        # 不插值時使用原始數據連線
-        fig.add_trace(
-            go.Scatter(
-                x=flow_original,
-                y=head_original,
-                mode='lines+markers' if show_points else 'lines',
-                name=model_name,
-                line=dict(color=color, width=3),
-                hovertemplate=f'{model_name}<br>流量: %{{x:.1f}} {flow_unit}<br>揚程: %{{y:.2f}} {head_unit}'
-            ),
-            secondary_y=False
-        )
-
-# 計算軸的範圍
-all_flows = []
-all_heads = []
-for model in pump_models.values():
-    all_flows.extend(model["flow"])
-    all_heads.extend(model["head"])
-
-# 計算適當的坐標軸範圍，添加一些邊距
-max_flow = max(all_flows) * 1.1 if all_flows else 1000
-max_head = max(all_heads) * 1.1 if all_heads else 40
-min_flow = 0  # 通常流量從0開始
-min_head = 0  # 通常揚程從0開始
-
-# 創建轉換單位的標記
-head_alt_unit = "FT" if head_unit == "M" else "M"
-flow_units = ["LPM", "GPM", "M3/HR"]
-other_flow_units = [u for u in flow_units if u != flow_unit]
-
-# 更新第二軸的數據 (揚程轉換)
-head_conversion_factor = 3.28084 if head_unit == "M" else 0.3048  # M to FT or FT to M
-max_head_alt = max_head * head_conversion_factor
-
-# 更新佈局
-fig.update_layout(
-    title=chart_title,
-    title_x=0.5,
-    width=chart_width,
-    height=chart_height,
-    paper_bgcolor=bg_color,
-    plot_bgcolor=bg_color,
-    xaxis=dict(
-        title=f"流量 (Flow)",
-        showgrid=enable_grid,
-        gridcolor=grid_color,
-        zeroline=True,
-        zerolinecolor=grid_color,
-        range=[min_flow, max_flow],
-        showticklabels=True
-    ),
-    yaxis=dict(
-        title=f"揚程 (Head) ({head_unit})",
-        showgrid=enable_grid,
-        gridcolor=grid_color,
-        zeroline=True,
-        zerolinecolor=grid_color,
-        range=[min_head, max_head],
-        showticklabels=True
-    ),
-    yaxis2=dict(
-        title=f"揚程 (Head) ({head_alt_unit})",
-        showgrid=False,
-        range=[min_head, max_head_alt],
-        overlaying="y",
-        side="right",
-        showticklabels=True
-    ),
-    hovermode="closest",
-    showlegend=show_legend,
-    legend=dict(
-        orientation="h" if num_models <= 4 else "v",
-        yanchor="bottom" if num_models <= 4 else "top",
-        y=-0.2 if num_models <= 4 else 1,
-        xanchor="center" if num_models <= 4 else "left",
-        x=0.5 if num_models <= 4 else 1.05
-    )
-)
-
-# 添加其他單位的刻度
-# 首先，計算轉換因子
-flow_conversion_factors = {
-    "GPM-LPM": 3.78541,  # GPM to LPM
-    "LPM-GPM": 1/3.78541,  # LPM to GPM
-    "GPM-M3/HR": 1/4.40287,  # GPM to M3/HR
-    "M3/HR-GPM": 4.40287,  # M3/HR to GPM
-    "LPM-M3/HR": 0.06,  # LPM to M3/HR (近似)
-    "M3/HR-LPM": 1/0.06  # M3/HR to LPM (近似)
 }
 
-# 添加X軸次級刻度線
-if flow_unit == "LPM":
-    # 添加GPM刻度線
-    secondary_ticks_gpm = np.linspace(0, max_flow * flow_conversion_factors["LPM-GPM"], 6)
-    secondary_ticks_gpm = np.round(secondary_ticks_gpm, 0)
+# 創建圖表函數
+def create_exact_match_chart():
+    # 設置圖表樣式與尺寸（接近原圖的比例）
+    plt.style.use('default')
+    fig = plt.figure(figsize=(10, 8), dpi=100)
+    ax = fig.add_subplot(111)
     
-    # 添加M3/HR刻度線
-    secondary_ticks_m3hr = np.linspace(0, max_flow * flow_conversion_factors["LPM-M3/HR"], 6)
-    secondary_ticks_m3hr = np.round(secondary_ticks_m3hr, 1)
+    # 設置背景與網格
+    ax.set_facecolor('white')
+    ax.grid(True, linestyle='-', color='gray', alpha=0.5)
     
-    fig.update_layout(
-        xaxis=dict(
-            tickvals=np.linspace(0, max_flow, 6),
-            ticktext=[f"{int(x)}" for x in np.linspace(0, max_flow, 6)]
-        )
-    )
+    # 設置軸範圍
+    ax.set_xlim(0, 1000)
+    ax.set_ylim(0, 35)
     
-    # 添加M3/HR的第二個刻度軸
-    fig.add_trace(
-        go.Scatter(
-            x=[None],
-            y=[None],
-            mode="markers",
-            marker=dict(size=0),
-            showlegend=False
-        ),
-        row=1, col=1
-    )
+    # 設置主軸刻度和標籤 - 匹配圖片
+    # FT刻度 - 左側Y軸
+    ft_ticks = [0, 5, 10, 15, 20, 25, 30, 34]
+    ax.set_yticks(ft_ticks)
+    ax.set_yticklabels([str(tick) for tick in ft_ticks])
     
-    # 添加刻度標記
-    for i, (gpm, m3hr) in enumerate(zip(secondary_ticks_gpm, secondary_ticks_m3hr)):
-        position = i / 5  # 從0到1的相對位置
+    # 流量刻度 - X軸
+    flow_ticks = [0, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+    ax.set_xticks(flow_ticks)
+    ax.set_xticklabels([str(tick) if tick % 200 == 0 or tick == 0 else "" for tick in flow_ticks])
+    
+    # 創建第二個Y軸 - 用於M值
+    ax2 = ax.twinx()
+    ax2.set_ylim(0, 10)
+    m_ticks = [0, 2, 4, 6, 8, 10]
+    ax2.set_yticks(m_ticks)
+    ax2.set_yticklabels([str(tick) for tick in m_ticks])
+    
+    # 添加坐標軸標籤
+    ax.set_ylabel('HEAD\n(FT) ( M )', fontsize=12)
+    
+    # 繪製每個泵浦型號的曲線
+    for model_name, data in pump_models.items():
+        # 獲取數據
+        flow = data["flow"]
+        head_m = data["head"]
         
-        # 添加GPM刻度註釋
-        fig.add_annotation(
-            x=position * max_flow,
-            y=0,
-            text=f"{int(gpm)}",
-            showarrow=False,
-            xanchor="center",
-            yanchor="top",
-            yshift=-40,
-            font=dict(size=10)
-        )
+        # 將米轉換為英尺
+        head_ft = [h * 3.28084 for h in head_m]
         
-        # 添加M3/HR刻度註釋
-        fig.add_annotation(
-            x=position * max_flow,
-            y=0,
-            text=f"{m3hr:.1f}",
-            showarrow=False,
-            xanchor="center",
-            yanchor="top",
-            yshift=-70,
-            font=dict(size=10)
-        )
+        # 生成平滑曲線的點
+        x_smooth = np.linspace(min(flow), max(flow), 100)
+        y_smooth_ft = np.interp(x_smooth, flow, head_ft)
+        
+        # 繪製曲線
+        line, = ax.plot(x_smooth, y_smooth_ft, 'k-', linewidth=2)
+        
+        # 找到合適位置添加型號標籤
+        # 找到曲線中間位置
+        idx = len(x_smooth) // 2
+        text_x = x_smooth[idx]
+        text_y = y_smooth_ft[idx]
+        
+        # 計算角度使文字沿著曲線方向
+        dx = x_smooth[idx+5] - x_smooth[idx-5]
+        dy = y_smooth_ft[idx+5] - y_smooth_ft[idx-5]
+        angle = np.degrees(np.arctan2(dy, dx))
+        
+        # 調整角度使文字可讀
+        if angle < -30:
+            angle += 180
+        
+        # 添加型號標籤
+        plt.text(text_x, text_y, model_name, fontsize=12, 
+                 rotation=angle, rotation_mode='anchor',
+                 ha='center', va='center')
+    
+    # 添加頻率標註
+    plt.text(800, 30, frequency, fontsize=14)
+    
+    # 添加底部流量刻度及標籤
+    # 底部X軸添加M³/h刻度
+    ax3 = ax.twiny()
+    ax3.set_xlim(ax.get_xlim())
+    m3h_max = 60
+    m3h_ticks = list(range(0, m3h_max+1, 5))
+    m3h_positions = [pos * (1000/m3h_max) for pos in m3h_ticks]
+    ax3.set_xticks(m3h_positions)
+    ax3.set_xticklabels([str(tick) for tick in m3h_ticks])
+    ax3.spines['top'].set_visible(False)
+    ax3.spines['bottom'].set_position(('outward', 40))
+    
+    # 底部添加GPM刻度
+    ax4 = ax.twiny()
+    ax4.set_xlim(ax.get_xlim())
+    gpm_max = 250
+    gpm_ticks = list(range(0, gpm_max+1, 50))
+    gpm_positions = [pos * (1000/gpm_max) for pos in gpm_ticks]
+    ax4.set_xticks(gpm_positions)
+    ax4.set_xticklabels([str(tick) for tick in gpm_ticks])
+    ax4.spines['top'].set_visible(False)
+    ax4.spines['bottom'].set_position(('outward', 80))
     
     # 添加單位標籤
-    fig.add_annotation(
-        x=max_flow * 1.02,
-        y=0,
-        text=f"({flow_unit})",
-        showarrow=False,
-        xanchor="left",
-        yanchor="top",
-        yshift=-10,
-        font=dict(size=12)
-    )
+    fig.text(0.94, 0.02, '(LPM)', fontsize=10)
+    fig.text(0.94, 0.06, '(GPM)', fontsize=10)
+    fig.text(0.94, 0.1, '(M³/h)', fontsize=10)
+    fig.text(0.5, 0.01, 'FLOW', fontsize=12, ha='center')
     
-    fig.add_annotation(
-        x=max_flow * 1.02,
-        y=0,
-        text=f"(GPM)",
-        showarrow=False,
-        xanchor="left",
-        yanchor="top",
-        yshift=-40,
-        font=dict(size=12)
-    )
+    # 添加藍色"Curve"標題
+    # 創建一個藍色的矩形
+    ax_title = fig.add_axes([0.05, 0.92, 0.2, 0.06])
+    ax_title.set_xticks([])
+    ax_title.set_yticks([])
+    ax_title.set_facecolor('blue')
+    ax_title.text(0.5, 0.5, 'Curve', color='white', fontsize=14,
+                 ha='center', va='center')
+    ax_title.spines['top'].set_visible(False)
+    ax_title.spines['right'].set_visible(False)
+    ax_title.spines['bottom'].set_visible(False)
+    ax_title.spines['left'].set_visible(False)
     
-    fig.add_annotation(
-        x=max_flow * 1.02,
-        y=0,
-        text=f"(M³/hr)",
-        showarrow=False,
-        xanchor="left",
-        yanchor="top",
-        yshift=-70,
-        font=dict(size=12)
-    )
+    # 添加灰色外框
+    rect = patches.Rectangle((0.05, 0.05), 0.9, 0.83, 
+                            linewidth=1, edgecolor='gray', facecolor='none',
+                            transform=fig.transFigure)
+    fig.patches.append(rect)
     
-    # 添加單位標籤
-    fig.add_annotation(
-        x=max_flow / 2,
-        y=0,
-        text="FLOW",
-        showarrow=False,
-        xanchor="center",
-        yanchor="top",
-        yshift=-90,
-        font=dict(size=12, color="black")
-    )
+    # 調整佈局
+    plt.tight_layout(rect=[0.05, 0.15, 0.95, 0.9])
+    
+    # 返回圖表
+    return fig
 
-elif flow_unit == "GPM":
-    # 類似的代碼用於GPM作為主單位的情況
-    secondary_ticks_lpm = np.linspace(0, max_flow * flow_conversion_factors["GPM-LPM"], 6)
-    secondary_ticks_lpm = np.round(secondary_ticks_lpm, 0)
-    
-    secondary_ticks_m3hr = np.linspace(0, max_flow * flow_conversion_factors["GPM-M3/HR"], 6)
-    secondary_ticks_m3hr = np.round(secondary_ticks_m3hr, 1)
-    
-    # 類似的註釋代碼...
+# 生成圖表
+fig = create_exact_match_chart()
 
-elif flow_unit == "M3/HR":
-    # 類似的代碼用於M3/HR作為主單位的情況
-    secondary_ticks_lpm = np.linspace(0, max_flow * flow_conversion_factors["M3/HR-LPM"], 6)
-    secondary_ticks_lpm = np.round(secondary_ticks_lpm, 0)
-    
-    secondary_ticks_gpm = np.linspace(0, max_flow * flow_conversion_factors["M3/HR-GPM"], 6)
-    secondary_ticks_gpm = np.round(secondary_ticks_gpm, 0)
-    
-    # 類似的註釋代碼...
+# 顯示圖表
+st.pyplot(fig)
 
-# 添加頻率註釋
-fig.add_annotation(
-    x=max_flow * 0.85,
-    y=max_head * 0.85,
-    text=frequency,
-    showarrow=False,
-    font=dict(size=20)
+# 保存圖表到臨時文件
+buffer = io.BytesIO()
+fig.savefig(buffer, format='png', dpi=300, bbox_inches='tight')
+buffer.seek(0)
+
+# 下載按鈕
+st.download_button(
+    label="下載泵浦曲線圖 (PNG)",
+    data=buffer,
+    file_name=f"pump_curve_{frequency}.png",
+    mime="image/png",
 )
 
-# 在新列顯示圖表
-st.plotly_chart(fig, use_container_width=False)
+# 添加數據表格
+show_data = st.checkbox("顯示曲線數據")
+if show_data:
+    st.subheader("泵浦曲線數據表")
+    for model, data in pump_models.items():
+        flow_lpm = data["flow"]
+        head_m = data["head"]
+        # 計算轉換值
+        head_ft = [round(h * 3.28084, 1) for h in head_m]
+        flow_gpm = [round(f / 3.78541, 1) for f in flow_lpm]
+        flow_m3h = [round(f * 0.06, 2) for f in flow_lpm]
+        
+        # 創建數據表
+        df_data = {
+            "流量 (LPM)": flow_lpm,
+            "流量 (GPM)": flow_gpm,
+            "流量 (M³/h)": flow_m3h,
+            "揚程 (M)": head_m,
+            "揚程 (FT)": head_ft
+        }
+        
+        st.write(f"**{model}**")
+        st.dataframe(df_data)
 
-# 添加導出圖像功能
-st.subheader("導出圖像")
-
-# 使用matplotlib替代方法生成圖片
-def save_plotly_fig_as_image(fig):
-    # 將Plotly圖表保存為HTML
-    temp_html = "temp_figure.html"
-    fig.write_html(temp_html)
-    
-    # 使用Streamlit的下載功能
-    with open(temp_html, "rb") as file:
-        html_content = file.read()
-    
-    # 提供HTML檔案下載
-    st.download_button(
-        label="下載泵浦曲線圖 (HTML格式)",
-        data=html_content,
-        file_name="pump_curve_chart.html",
-        mime="text/html",
-    )
-    
-    # 可選嘗試使用matplotlib再創建圖表
-    try:
-        import matplotlib.pyplot as plt
-        
-        # 創建matplotlib圖表
-        plt.figure(figsize=(chart_width/100, chart_height/100))
-        
-        # 繪製每個泵浦型號的曲線
-        for model_name, model_data in pump_models.items():
-            flow_data = model_data["flow"]
-            head_data = model_data["head"]
-            
-            if interpolate and len(flow_data) > 1:
-                # 生成插值用的點
-                x_smooth = np.linspace(min(flow_data), max(flow_data), 100)
-                y_smooth = np.interp(x_smooth, flow_data, head_data)
-                plt.plot(x_smooth, y_smooth, label=model_name)
-            else:
-                plt.plot(flow_data, head_data, label=model_name)
-                
-            if show_points:
-                plt.scatter(flow_data, head_data, s=30)
-        
-        # 設置坐標軸標籤和標題
-        plt.xlabel(f"流量 (Flow) - {flow_unit}")
-        plt.ylabel(f"揚程 (Head) - {head_unit}")
-        plt.title(chart_title)
-        plt.grid(enable_grid)
-        
-        # 添加頻率標註
-        plt.text(max_flow * 0.8, max_head * 0.8, frequency, fontsize=14)
-        
-        # 添加圖例
-        if show_legend:
-            plt.legend()
-        
-        # 保存為臨時檔案
-        plt_filename = "pump_curve_plot.png"
-        plt.savefig(plt_filename, dpi=300, bbox_inches="tight")
-        plt.close()
-        
-        # 提供PNG檔案下載
-        with open(plt_filename, "rb") as file:
-            img_data = file.read()
-        
-        st.download_button(
-            label="下載泵浦曲線圖 (PNG格式)",
-            data=img_data,
-            file_name="pump_curve_chart.png",
-            mime="image/png",
-        )
-    except Exception as e:
-        st.warning(f"無法生成PNG圖像，請使用HTML格式。錯誤：{e}")
-
-# 調用函數代替直接使用to_image
-save_plotly_fig_as_image(fig)
-
-# 添加數據表顯示
-show_data_tables = st.checkbox("顯示所有泵浦型號數據", value=False)
-
-if show_data_tables:
-    st.subheader("泵浦型號數據表")
-    
-    for model_name, model_data in pump_models.items():
-        # 創建此型號的DataFrame
-        df = pd.DataFrame({
-            f"流量 ({flow_unit})": model_data["flow"],
-            f"揚程 ({head_unit})": model_data["head"]
-        })
-        
-        # 添加GPM轉換（如果適用）
-        if flow_unit != "GPM":
-            df[f"流量 (GPM)"] = [convert_flow(f, flow_unit, "GPM") for f in model_data["flow"]]
-        
-        # 添加LPM轉換（如果適用）
-        if flow_unit != "LPM":
-            df[f"流量 (LPM)"] = [convert_flow(f, flow_unit, "LPM") for f in model_data["flow"]]
-        
-        # 添加M3/HR轉換（如果適用）
-        if flow_unit != "M3/HR":
-            df[f"流量 (M3/HR)"] = [convert_flow(f, flow_unit, "M3/HR") for f in model_data["flow"]]
-        
-        # 添加另一個揚程單位的轉換
-        head_alt_unit = "FT" if head_unit == "M" else "M"
-        df[f"揚程 ({head_alt_unit})"] = [convert_head(h, head_unit, head_alt_unit) for h in model_data["head"]]
-        
-        # 顯示數據表
-        st.markdown(f"**型號: {model_name}**")
-        st.dataframe(df)
-
-# 添加CSV導出功能
-if pump_models:
-    st.subheader("導出數據為CSV")
-    
-    # 準備所有模型的數據
-    all_data = []
-    for model_name, model_data in pump_models.items():
-        for i, (flow, head) in enumerate(zip(model_data["flow"], model_data["head"])):
-            all_data.append({
-                "型號": model_name,
-                f"流量 ({flow_unit})": flow,
-                f"揚程 ({head_unit})": head,
-                f"流量 (GPM)": convert_flow(flow, flow_unit, "GPM") if flow_unit != "GPM" else flow,
-                f"流量 (LPM)": convert_flow(flow, flow_unit, "LPM") if flow_unit != "LPM" else flow,
-                f"流量 (M3/HR)": convert_flow(flow, flow_unit, "M3/HR") if flow_unit != "M3/HR" else flow,
-                f"揚程 ({head_alt_unit})": convert_head(head, head_unit, head_alt_unit)
-            })
-    
-    # 創建DataFrame
-    all_df = pd.DataFrame(all_data)
-    
-    # 提供CSV下載
-    csv = all_df.to_csv(index=False)
-    st.download_button(
-        label="下載所有泵浦數據 (CSV)",
-        data=csv,
-        file_name="pump_curves_data.csv",
-        mime="text/csv",
-    )
-
-# 添加使用說明
-with st.expander("使用說明"):
-    st.markdown("""
-    ### 如何使用這個工具：
-    
-    1. **設置泵浦型號**：
-       - 使用側邊欄設置您想要顯示的泵浦型號數量
-       - 為每個型號命名並設置數據點
-       
-    2. **調整圖表外觀**：
-       - 設置圖表尺寸、背景顏色和網格顏色
-       - 啟用/禁用平滑曲線、數據點和網格
-       
-    3. **更改單位**：
-       - 選擇您偏好的流量和揚程單位
-       - 圖表將自動顯示所有單位的刻度
-       
-    4. **導出結果**：
-       - 點擊"下載泵浦曲線圖"按鈕以PNG格式保存圖表
-       - 也可以下載所有數據為CSV格式
-    
-    ### 單位轉換：
-    
-    - **流量單位**：
-      - GPM（加侖/分鐘）
-      - LPM（升/分鐘）
-      - M3/HR（立方米/小時）
-    
-    - **揚程單位**：
-      - FT（英尺）
-      - M（米）
-    """)
-
-# 添加頁腳
+# 添加簡單說明
 st.markdown("---")
-st.markdown("© 2025 泵浦曲線繪製工具")
+st.markdown("""
+**說明**: 此應用程序生成的圖表精確匹配了範例圖片中的泵浦曲線圖。包含:
+- DS-05、DS-10、DS-20 和 DS-30 四種型號的泵浦曲線
+- 流量單位: LPM (主要)、GPM 和 M³/h (底部刻度)
+- 揚程單位: FT (左側) 和 M (右側)
+- 與原圖片相同的刻度和網格
+- 相似的藍色標題和整體佈局
+""")
