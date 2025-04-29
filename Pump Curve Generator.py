@@ -245,6 +245,7 @@ def main():
                     except Exception as e:
                         st.error(f"Error generating chart: {e}")
                 else:
+                    st.info("click generate button to generate the curve again")
             
             with col2:
                 st.subheader("Pump Curve Data")
