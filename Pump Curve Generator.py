@@ -11,6 +11,15 @@ def main():
     
     st.title("Pump Curve Generator Tool")
     
+    # Initialize session state for tracking changes
+    if 'refresh_counter' not in st.session_state:
+        st.session_state.refresh_counter = 0
+        st.session_state.last_config = {}
+    
+    # Initialize input reset key if it doesn't exist
+    if 'input_reset_key' not in st.session_state:
+        st.session_state.input_reset_key = 0
+    
     st.markdown("""
     This tool allows you to generate pump performance curves similar to manufacturer specifications.
     You can either upload a CSV file with your pump data or manually input the data points.
@@ -37,13 +46,15 @@ def main():
             with col1:
                 # Configuration options
                 st.subheader("Chart Configuration")
-                col_a, col_b, col_c = st.columns(3)
+                col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
                 with col_a:
                     frequency = st.selectbox("Frequency (Hz)", [50, 60], index=0)
                 with col_b:
                     chart_style = st.selectbox("Chart Style", ["Modern", "Classic"], index=0)
                 with col_c:
                     show_system_curve = st.checkbox("Show System Curve", value=False)
+                with col_d:
+                    refresh_button = st.button("Refresh Chart")
                 
                 # System curve parameters (only shown if show_system_curve is True)
                 if show_system_curve:
@@ -57,8 +68,43 @@ def main():
                     static_head = 0
                     k_factor = 0
                 
-                # Generate curve
-                fig = generate_pump_curve(df, frequency, chart_style, show_system_curve, static_head, k_factor)
+                # Track state to detect changes
+                state = st.session_state
+                if 'last_config' not in state:
+                    state.last_config = {
+                        'frequency': frequency,
+                        'chart_style': chart_style,
+                        'show_system_curve': show_system_curve,
+                        'static_head': static_head,
+                        'k_factor': k_factor,
+                        'df_hash': hash(str(df))
+                    }
+                    state.refresh_counter = 0
+                
+                # Check if configuration has changed or refresh button was clicked
+                config_changed = (
+                    state.last_config['frequency'] != frequency or
+                    state.last_config['chart_style'] != chart_style or
+                    state.last_config['show_system_curve'] != show_system_curve or
+                    state.last_config['static_head'] != static_head or
+                    state.last_config['k_factor'] != k_factor or
+                    state.last_config['df_hash'] != hash(str(df))
+                )
+                
+                if refresh_button or config_changed:
+                    state.refresh_counter += 1
+                    state.last_config = {
+                        'frequency': frequency,
+                        'chart_style': chart_style,
+                        'show_system_curve': show_system_curve,
+                        'static_head': static_head,
+                        'k_factor': k_factor,
+                        'df_hash': hash(str(df))
+                    }
+                
+                # Generate curve - passing refresh counter to force regeneration
+                fig = generate_pump_curve(df, frequency, chart_style, show_system_curve, 
+                                         static_head, k_factor, state.refresh_counter)
                 st.pyplot(fig)
                 
                 # Add download button for the plot
@@ -150,34 +196,48 @@ def handle_csv_upload():
 def handle_manual_input():
     st.subheader("Manual Data Input")
     
+    # Initialize session state for manually input data if it doesn't exist
+    if 'input_reset_key' not in st.session_state:
+        st.session_state.input_reset_key = 0
+    
+    # Add a reset button outside the form
+    if st.button("Reset Input Form", key=f"reset_button_{st.session_state.input_reset_key}"):
+        st.session_state.input_reset_key += 1  # Incrementing forces form to re-render
+        st.experimental_rerun()  # Force a rerun of the app
+    
     # Create a form for manual input
-    with st.form("manual_input_form"):
+    with st.form(f"manual_input_form_{st.session_state.input_reset_key}"):
         # Units selection
         col1, col2 = st.columns(2)
         with col1:
-            flow_unit = st.selectbox("Flow Rate Unit", ["LPM", "m³/h", "GPM"])
+            flow_unit = st.selectbox("Flow Rate Unit", ["LPM", "m³/h", "GPM"], 
+                                   key=f"flow_unit_{st.session_state.input_reset_key}")
         with col2:
-            head_unit = st.selectbox("Head Unit", ["m", "ft"])
+            head_unit = st.selectbox("Head Unit", ["m", "ft"], 
+                                   key=f"head_unit_{st.session_state.input_reset_key}")
         
         # Number of pump models
-        num_models = st.number_input("Number of Pump Models", min_value=1, max_value=5, value=1)
+        num_models = st.number_input("Number of Pump Models", min_value=1, max_value=5, value=1,
+                                   key=f"num_models_{st.session_state.input_reset_key}")
         
         # Model names
         model_names = []
         cols = st.columns(min(num_models, 5))
         for i, col in enumerate(cols):
-            model_name = col.text_input(f"Model {i+1} Name", value=f"DS-{(i+1)*10}")
+            model_name = col.text_input(f"Model {i+1} Name", value=f"DS-{(i+1)*10}",
+                                      key=f"model_name_{i}_{st.session_state.input_reset_key}")
             model_names.append(model_name)
         
         # Number of data points
-        num_points = st.number_input("Number of Data Points", min_value=3, max_value=20, value=8)
+        num_points = st.number_input("Number of Data Points", min_value=3, max_value=20, value=8,
+                                   key=f"num_points_{st.session_state.input_reset_key}")
         
         # Create an empty dataframe for input
         columns = [f'Flow ({flow_unit})']
         for name in model_names:
             columns.append(f"{name} Head ({head_unit})")
         
-        # Pre-fill with some reasonable values
+        # Create default data
         data = {}
         data[columns[0]] = [i*100 for i in range(num_points)]
         
@@ -190,20 +250,30 @@ def handle_manual_input():
         
         df = pd.DataFrame(data)
         
-        # Create an editable table
+        # Create an editable table with a unique key
         edited_df = st.data_editor(df, use_container_width=True, 
-                                  num_rows="fixed", height=min(400, 50 + 35*num_points))
+                                  num_rows="fixed", 
+                                  height=min(400, 50 + 35*num_points),
+                                  key=f"data_editor_{st.session_state.input_reset_key}")
         
         # Submit button
-        submitted = st.form_submit_button("Generate Curve")
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button("Generate Curve")
+        with col2:
+            # Add a refresh button inside the form
+            refresh_data = st.form_submit_button("Refresh Form")
         
         if submitted:
+            return edited_df
+        elif refresh_data:
+            # Just return the current data to update the form
             return edited_df
     
     return None
 
 def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curve=False, 
-                       static_head=0, k_factor=0):
+                       static_head=0, k_factor=0, refresh_counter=0):
     # Create a larger figure to prevent text overlap
     if chart_style == "Modern":
         plt.style.use('seaborn-v0_8-whitegrid')
@@ -230,6 +300,16 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
         model_name = column.split(' ')[0]
         color = colors[i % len(colors)]
         ax.plot(df[flow_col], df[column], linewidth=2.5, label=model_name, color=color)
+        
+        # Add model name label at the end of each curve
+        last_idx = df[column].dropna().last_valid_index()
+        if last_idx is not None:
+            x_pos = df[flow_col].iloc[last_idx]
+            y_pos = df[column].iloc[last_idx]
+            # Add some padding to position the text
+            x_padding = (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.02
+            ax.annotate(model_name, xy=(x_pos + x_padding, y_pos), 
+                        color=color, fontweight='bold', va='center')
     
     # Add system curve if requested
     if show_system_curve:
@@ -285,20 +365,20 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
     
     # Add secondary x-axis for alternative flow units if primary is LPM
     if flow_unit == "LPM":
-        # Add m³/h axis at bottom with spacing
-        ax_m3h = ax.secondary_xaxis(-0.18, functions=(lambda x: x/60, lambda x: x*60))
+        # Add m³/h axis at bottom with less spacing (closer to main axis)
+        ax_m3h = ax.secondary_xaxis(-0.15, functions=(lambda x: x/60, lambda x: x*60))
         # Limit ticks to prevent overcrowding
         ax_m3h.xaxis.set_major_locator(MaxNLocator(7))
         # Format to 1 decimal place
         ax_m3h.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
-        ax_m3h.set_xlabel(f'Flow (m³/h)', fontsize=12, fontweight='bold')
+        ax_m3h.set_xlabel(f'Flow (m³/h)', fontsize=12, fontweight='bold', labelpad=10)
         
-        # Add GPM axis below with more spacing
-        ax_gpm = ax.secondary_xaxis(-0.36, functions=(lambda x: x*0.264172, lambda x: x/0.264172))
+        # Add GPM axis below with adjusted spacing
+        ax_gpm = ax.secondary_xaxis(-0.30, functions=(lambda x: x*0.264172, lambda x: x/0.264172))
         # Limit ticks and format
         ax_gpm.xaxis.set_major_locator(MaxNLocator(7))
         ax_gpm.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
-        ax_gpm.set_xlabel(f'Flow (GPM)', fontsize=12, fontweight='bold')
+        ax_gpm.set_xlabel(f'Flow (GPM)', fontsize=12, fontweight='bold', labelpad=10)
     
     # Add secondary y-axis for alternative head units if primary is m
     if head_unit == "m":
@@ -316,8 +396,8 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
              fontsize=14, 
              bbox=dict(facecolor='white', alpha=0.7, boxstyle='round'))
     
-    # Set legend with better positioning to avoid overlap
-    ax.legend(loc='upper right', fontsize=10, framealpha=0.7)
+    # Remove the legend since we're adding labels directly to the curves
+    # ax.legend(loc='upper right', fontsize=10, framealpha=0.7)
     
     plt.title('Pump Performance Curves', fontsize=16, fontweight='bold', pad=20)
     plt.tight_layout()
