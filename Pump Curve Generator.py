@@ -229,23 +229,26 @@ def main():
                 # Generate curve using parameters from session state
                 if st.session_state.chart_generated:
                     params = st.session_state.chart_params
-                    fig = generate_pump_curve(
-                        df, 
-                        params['frequency'], 
-                        params['chart_style'], 
-                        params['show_system_curve'], 
-                        params['static_head'], 
-                        params['k_factor'],
-                        min_flow=params['min_flow'],
-                        max_flow=params['max_flow'],
-                        min_head=params['min_head'],
-                        max_head=params['max_head'],
-                        show_grid=params['show_grid']
-                    )
-                    st.pyplot(fig)
-                    
-                    # Add download button for the plot
-                    download_button_for_plot(fig)
+                    try:
+                        fig = generate_pump_curve(
+                            df, 
+                            params['frequency'], 
+                            params['chart_style'], 
+                            params['show_system_curve'], 
+                            params['static_head'], 
+                            params['k_factor'],
+                            min_flow=params['min_flow'],
+                            max_flow=params['max_flow'],
+                            min_head=params['min_head'],
+                            max_head=params['max_head'],
+                            show_grid=params['show_grid']
+                        )
+                        st.pyplot(fig)
+                        
+                        # Add download button for the plot
+                        download_button_for_plot(fig)
+                    except Exception as e:
+                        st.error(f"Error generating chart: {e}")
                 else:
                     st.info("Click 'Refresh Chart' to update the pump curve with your current configuration settings.")
             
