@@ -47,52 +47,89 @@ def main():
                 # Configuration options
                 st.subheader("Chart Configuration")
                 
-                # Use container to avoid rerun when changing these options
-                with st.container():
-                    col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
-                    with col_a:
-                        frequency = st.selectbox("Frequency (Hz)", [50, 60], index=0, key="frequency_select")
-                    with col_b:
-                        chart_style = st.selectbox("Chart Style", ["Modern", "Classic"], index=0, key="chart_style_select")
-                    with col_c:
-                        show_system_curve = st.checkbox("Show System Curve", value=False, key="system_curve_checkbox")
-                    with col_d:
-                        refresh_button = st.button("Refresh Chart", key="refresh_chart_button")
-                
-                # System curve parameters (only shown if show_system_curve is True)
-                if show_system_curve:
-                    with st.container():
-                        col_d, col_e = st.columns(2)
-                        with col_d:
-                            static_head = st.number_input("Static Head (m)", min_value=0.0, value=2.0, step=0.5, key="static_head_input")
-                        with col_e:
-                            k_factor = st.number_input("Friction Factor (k)", min_value=0.00001, value=0.0001, 
-                                                    format="%.6f", step=0.00001, key="k_factor_input")
-                else:
-                    static_head = 0
-                    k_factor = 0
-                
-                # Only regenerate chart when refresh button is clicked
+                # Initialize chart parameters in session state if not present
                 if 'chart_params' not in st.session_state:
                     st.session_state.chart_params = {
-                        'frequency': frequency,
-                        'chart_style': chart_style,
-                        'show_system_curve': show_system_curve,
-                        'static_head': static_head,
-                        'k_factor': k_factor,
+                        'frequency': 50,
+                        'chart_style': "Modern",
+                        'show_system_curve': False,
+                        'static_head': 2.0,
+                        'k_factor': 0.0001,
                     }
                 
-                if refresh_button:
-                    # Update chart parameters
-                    st.session_state.chart_params = {
-                        'frequency': frequency,
-                        'chart_style': chart_style,
-                        'show_system_curve': show_system_curve,
-                        'static_head': static_head,
-                        'k_factor': k_factor,
-                    }
+                # Create columns for chart options
+                col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
                 
-                # Generate curve with parameters from session state
+                # When any option changes, immediately update session state
+                with col_a:
+                    frequency = st.selectbox(
+                        "Frequency (Hz)", 
+                        [50, 60], 
+                        index=[50, 60].index(st.session_state.chart_params['frequency']),
+                        key="frequency_select",
+                        on_change=lambda: setattr(
+                            st.session_state, 'chart_params', 
+                            {**st.session_state.chart_params, 'frequency': st.session_state.frequency_select}
+                        )
+                    )
+                
+                with col_b:
+                    chart_style = st.selectbox(
+                        "Chart Style", 
+                        ["Modern", "Classic"], 
+                        index=["Modern", "Classic"].index(st.session_state.chart_params['chart_style']),
+                        key="chart_style_select",
+                        on_change=lambda: setattr(
+                            st.session_state, 'chart_params', 
+                            {**st.session_state.chart_params, 'chart_style': st.session_state.chart_style_select}
+                        )
+                    )
+                
+                with col_c:
+                    show_system = st.checkbox(
+                        "Show System Curve", 
+                        value=st.session_state.chart_params['show_system_curve'],
+                        key="system_curve_checkbox",
+                        on_change=lambda: setattr(
+                            st.session_state, 'chart_params', 
+                            {**st.session_state.chart_params, 'show_system_curve': st.session_state.system_curve_checkbox}
+                        )
+                    )
+                
+                with col_d:
+                    refresh_button = st.button("Refresh Chart", key="refresh_chart_button")
+                
+                # System curve parameters (only shown if show_system_curve is True)
+                if st.session_state.chart_params['show_system_curve']:
+                    col_d, col_e = st.columns(2)
+                    with col_d:
+                        static_head = st.number_input(
+                            "Static Head (m)", 
+                            min_value=0.0, 
+                            value=st.session_state.chart_params['static_head'], 
+                            step=0.5,
+                            key="static_head_input",
+                            on_change=lambda: setattr(
+                                st.session_state, 'chart_params', 
+                                {**st.session_state.chart_params, 'static_head': st.session_state.static_head_input}
+                            )
+                        )
+                    
+                    with col_e:
+                        k_factor = st.number_input(
+                            "Friction Factor (k)", 
+                            min_value=0.00001, 
+                            value=st.session_state.chart_params['k_factor'], 
+                            format="%.6f", 
+                            step=0.00001,
+                            key="k_factor_input",
+                            on_change=lambda: setattr(
+                                st.session_state, 'chart_params', 
+                                {**st.session_state.chart_params, 'k_factor': st.session_state.k_factor_input}
+                            )
+                        )
+                
+                # Generate curve using parameters from session state
                 params = st.session_state.chart_params
                 fig = generate_pump_curve(
                     df, 
