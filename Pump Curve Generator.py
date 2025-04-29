@@ -37,9 +37,13 @@ def main():
     if 'current_df' not in st.session_state:
         st.session_state.current_df = None
     
+    # Initialize chart generation flag
+    if 'chart_generated' not in st.session_state:
+        st.session_state.chart_generated = False
+    
     st.markdown("""
     This tool allows you to generate pump performance curves similar to manufacturer specifications.
-    You can either upload a CSV file with your pump data or manually input the data points.
+    First, configure your chart settings, then upload or enter your pump data to generate the curve.
     """)
     
     tab1, tab2 = st.tabs(["Create Pump Curves", "About Pump Curves"])
