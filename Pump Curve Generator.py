@@ -46,65 +46,62 @@ def main():
             with col1:
                 # Configuration options
                 st.subheader("Chart Configuration")
-                col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
-                with col_a:
-                    frequency = st.selectbox("Frequency (Hz)", [50, 60], index=0)
-                with col_b:
-                    chart_style = st.selectbox("Chart Style", ["Modern", "Classic"], index=0)
-                with col_c:
-                    show_system_curve = st.checkbox("Show System Curve", value=False)
-                with col_d:
-                    refresh_button = st.button("Refresh Chart")
+                
+                # Use container to avoid rerun when changing these options
+                with st.container():
+                    col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
+                    with col_a:
+                        frequency = st.selectbox("Frequency (Hz)", [50, 60], index=0, key="frequency_select")
+                    with col_b:
+                        chart_style = st.selectbox("Chart Style", ["Modern", "Classic"], index=0, key="chart_style_select")
+                    with col_c:
+                        show_system_curve = st.checkbox("Show System Curve", value=False, key="system_curve_checkbox")
+                    with col_d:
+                        refresh_button = st.button("Refresh Chart", key="refresh_chart_button")
                 
                 # System curve parameters (only shown if show_system_curve is True)
                 if show_system_curve:
-                    col_d, col_e = st.columns(2)
-                    with col_d:
-                        static_head = st.number_input("Static Head (m)", min_value=0.0, value=2.0, step=0.5)
-                    with col_e:
-                        k_factor = st.number_input("Friction Factor (k)", min_value=0.00001, value=0.0001, 
-                                                format="%.6f", step=0.00001)
+                    with st.container():
+                        col_d, col_e = st.columns(2)
+                        with col_d:
+                            static_head = st.number_input("Static Head (m)", min_value=0.0, value=2.0, step=0.5, key="static_head_input")
+                        with col_e:
+                            k_factor = st.number_input("Friction Factor (k)", min_value=0.00001, value=0.0001, 
+                                                    format="%.6f", step=0.00001, key="k_factor_input")
                 else:
                     static_head = 0
                     k_factor = 0
                 
-                # Track state to detect changes
-                state = st.session_state
-                if 'last_config' not in state:
-                    state.last_config = {
+                # Only regenerate chart when refresh button is clicked
+                if 'chart_params' not in st.session_state:
+                    st.session_state.chart_params = {
                         'frequency': frequency,
                         'chart_style': chart_style,
                         'show_system_curve': show_system_curve,
                         'static_head': static_head,
                         'k_factor': k_factor,
-                        'df_hash': hash(str(df))
                     }
-                    state.refresh_counter = 0
                 
-                # Check if configuration has changed or refresh button was clicked
-                config_changed = (
-                    state.last_config['frequency'] != frequency or
-                    state.last_config['chart_style'] != chart_style or
-                    state.last_config['show_system_curve'] != show_system_curve or
-                    state.last_config['static_head'] != static_head or
-                    state.last_config['k_factor'] != k_factor or
-                    state.last_config['df_hash'] != hash(str(df))
+                if refresh_button:
+                    # Update chart parameters
+                    st.session_state.chart_params = {
+                        'frequency': frequency,
+                        'chart_style': chart_style,
+                        'show_system_curve': show_system_curve,
+                        'static_head': static_head,
+                        'k_factor': k_factor,
+                    }
+                
+                # Generate curve with parameters from session state
+                params = st.session_state.chart_params
+                fig = generate_pump_curve(
+                    df, 
+                    params['frequency'], 
+                    params['chart_style'], 
+                    params['show_system_curve'], 
+                    params['static_head'], 
+                    params['k_factor']
                 )
-                
-                if refresh_button or config_changed:
-                    state.refresh_counter += 1
-                    state.last_config = {
-                        'frequency': frequency,
-                        'chart_style': chart_style,
-                        'show_system_curve': show_system_curve,
-                        'static_head': static_head,
-                        'k_factor': k_factor,
-                        'df_hash': hash(str(df))
-                    }
-                
-                # Generate curve - passing refresh counter to force regeneration
-                fig = generate_pump_curve(df, frequency, chart_style, show_system_curve, 
-                                         static_head, k_factor, state.refresh_counter)
                 st.pyplot(fig)
                 
                 # Add download button for the plot
@@ -203,7 +200,7 @@ def handle_manual_input():
     # Add a reset button outside the form
     if st.button("Reset Input Form", key=f"reset_button_{st.session_state.input_reset_key}"):
         st.session_state.input_reset_key += 1  # Incrementing forces form to re-render
-        st.experimental_rerun()  # Force a rerun of the app
+        st.rerun()  # Force a rerun of the app
     
     # Create a form for manual input
     with st.form(f"manual_input_form_{st.session_state.input_reset_key}"):
