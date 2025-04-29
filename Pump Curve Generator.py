@@ -213,7 +213,7 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
         fig, ax = plt.subplots(figsize=(12, 8))
     
     # Increase figure margins to make room for axes labels
-    plt.subplots_adjust(bottom=0.2, right=0.85)
+    plt.subplots_adjust(bottom=0.2, right=0.9)
     
     # Determine flow unit and head unit from column names
     flow_col = df.columns[0]
@@ -302,11 +302,13 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
     
     # Add secondary y-axis for alternative head units if primary is m
     if head_unit == "m":
-        ax_ft = ax.secondary_yaxis(1.18, functions=(lambda x: x*3.28084, lambda x: x/3.28084))
+        # Position the ft axis closer to the chart (1.05 instead of 1.18)
+        ax_ft = ax.secondary_yaxis(1.05, functions=(lambda x: x*3.28084, lambda x: x/3.28084))
         # Limit ticks and format
         ax_ft.yaxis.set_major_locator(MaxNLocator(7))
         ax_ft.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
-        ax_ft.set_ylabel(f'Head (ft)', fontsize=12, fontweight='bold')
+        # Position the label farther from the axis
+        ax_ft.set_ylabel(f'Head (ft)', fontsize=12, fontweight='bold', labelpad=15)
     
     # Add frequency information
     plt.text(0.05, 0.95, f"{frequency}Hz", 
