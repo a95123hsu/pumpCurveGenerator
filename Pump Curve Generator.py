@@ -221,11 +221,6 @@ def main():
                 if input_method == "Upload CSV" and not st.session_state.chart_generated:
                     st.session_state.chart_generated = True
                 
-                # Add refresh button
-                refresh_button = st.button("Refresh Chart", key="refresh_chart_button")
-                if refresh_button:
-                    st.session_state.chart_generated = True
-                
                 # Generate curve using parameters from session state
                 if st.session_state.chart_generated:
                     params = st.session_state.chart_params
@@ -250,7 +245,6 @@ def main():
                     except Exception as e:
                         st.error(f"Error generating chart: {e}")
                 else:
-                    st.info("Click 'Refresh Chart' to update the pump curve with your current configuration settings.")
             
             with col2:
                 st.subheader("Pump Curve Data")
