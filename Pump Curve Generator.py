@@ -10,7 +10,7 @@ def main():
     # Create a function to auto-update chart when configuration changes
     def update_chart_on_config_change():
         if st.session_state.current_df is not None and st.session_state.chart_generated:
-            st.experimental_rerun()
+            st.rerun()
 
     st.set_page_config(page_title="Pump Curve Generator", layout="wide")
     
