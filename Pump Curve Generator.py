@@ -248,46 +248,36 @@ def main():
         if df is not None and not df.empty:
             st.session_state.current_df = df  # Store the current dataframe
             
-            col1, col2 = st.columns([3, 1])
+            # For CSV uploads, automatically set chart_generated to True
+            if input_method == "Upload CSV" and not st.session_state.chart_generated:
+                st.session_state.chart_generated = True
             
-            with col1:
-                # For CSV uploads, automatically set chart_generated to True
-                if input_method == "Upload CSV" and not st.session_state.chart_generated:
-                    st.session_state.chart_generated = True
-                
-                # Generate curve using parameters from session state
-                if st.session_state.chart_generated:
-                    params = st.session_state.chart_params
-                    try:
-                        # Pass frequency option to the plotting function
-                        fig = generate_pump_curve(
-                            df, 
-                            frequency_option=params.get('frequency_option', "Both"),
-                            chart_style=params['chart_style'], 
-                            show_system_curve=params['show_system_curve'], 
-                            static_head=params['static_head'], 
-                            k_factor=params['k_factor'],
-                            min_flow=params['min_flow'],
-                            max_flow=params['max_flow'],
-                            min_head=params['min_head'],
-                            max_head=params['max_head'],
-                            show_grid=params['show_grid']
-                        )
-                        st.pyplot(fig)
-                        
-                        # Add download button for the plot
-                        download_button_for_plot(fig)
-                    except Exception as e:
-                        st.error(f"Error generating chart: {e}")
-                else:
-                    st.info("Click Generate Chart to create the pump curve.")
-            
-            with col2:
-                st.subheader("Pump Curve Data")
-                st.dataframe(df)
-                
-                # Add download button for the data
-                download_button_for_data(df)
+            # Generate curve using parameters from session state
+            if st.session_state.chart_generated:
+                params = st.session_state.chart_params
+                try:
+                    # Pass frequency option to the plotting function
+                    fig = generate_pump_curve(
+                        df, 
+                        frequency_option=params.get('frequency_option', "Both"),
+                        chart_style=params['chart_style'], 
+                        show_system_curve=params['show_system_curve'], 
+                        static_head=params['static_head'], 
+                        k_factor=params['k_factor'],
+                        min_flow=params['min_flow'],
+                        max_flow=params['max_flow'],
+                        min_head=params['min_head'],
+                        max_head=params['max_head'],
+                        show_grid=params['show_grid']
+                    )
+                    st.pyplot(fig)
+                    
+                    # Add download button for the plot
+                    download_button_for_plot(fig)
+                except Exception as e:
+                    st.error(f"Error generating chart: {e}")
+            else:
+                st.info("Click Generate Chart to create the pump curve.")
     
     with tab2:
         st.subheader("Understanding Pump Curves")
@@ -459,14 +449,12 @@ def handle_csv_upload():
 def handle_manual_input(frequency_option="Both"):
     st.subheader("Manual Data Input")
     
+    # Add instructions for copying from Excel
+    st.info("You can copy data from Excel and paste directly into these tables. Select cells in Excel, copy (Ctrl+C), click on the starting cell in the table below, and paste (Ctrl+V).")
+    
     # Initialize session state for manually input data if it doesn't exist
     if 'input_reset_key' not in st.session_state:
         st.session_state.input_reset_key = 0
-    
-    # Add a reset button outside the form
-    if st.button("Reset Input Form", key=f"reset_button_{st.session_state.input_reset_key}"):
-        st.session_state.input_reset_key += 1  # Incrementing forces form to re-render
-        st.rerun()  # Force a rerun of the app
     
     # Create a form for manual input
     with st.form(f"manual_input_form_{st.session_state.input_reset_key}"):
@@ -583,19 +571,15 @@ def handle_manual_input(frequency_option="Both"):
                     use_container_width=True,
                     num_rows="fixed",
                     height=min(500, 70 + 40*num_points),
-                    key=f"data_editor_{freq}_{st.session_state.input_reset_key}"
+                    key=f"data_editor_{freq}_{st.session_state.input_reset_key}",
+                    hide_index=False  # Show row indices for easier selection
                 )
                 
                 # Store the edited data
                 edited_data[freq] = edited_df
         
         # Submit button
-        col1, col2 = st.columns(2)
-        with col1:
-            submitted = st.form_submit_button("Generate Pump Curve")
-        with col2:
-            # Add a refresh button inside the form
-            refresh_data = st.form_submit_button("Refresh Form")
+        submitted = st.form_submit_button("Generate Pump Curve")
         
         if submitted:
             # Transform the edited data back into the format needed for plotting
@@ -629,9 +613,6 @@ def handle_manual_input(frequency_option="Both"):
             # Automatically generate the chart when data is submitted
             st.session_state.chart_generated = True
             return transformed_df
-        elif refresh_data:
-            # Just return the current data to update the form
-            return None
     
     return None
 
@@ -696,7 +677,6 @@ def generate_pump_curve(df, frequency_option="Both", chart_style="Modern", show_
         # Skip if frequency not selected to plot
         if freq not in frequencies_to_plot:
             continue
-            
         # Get column unit
         head_unit = col.split('(')[-1].split(')')[0]
         
@@ -900,18 +880,6 @@ def download_button_for_plot(fig):
         data=buf,
         file_name="pump_curve_plot.png",
         mime="image/png"
-    )
-
-def download_button_for_data(df):
-    # Convert dataframe to CSV
-    csv = df.to_csv(index=False)
-    
-    # Create download button
-    btn = st.download_button(
-        label="Download Data (CSV)",
-        data=csv,
-        file_name="pump_curve_data.csv",
-        mime="text/csv",
     )
 
 if __name__ == "__main__":
