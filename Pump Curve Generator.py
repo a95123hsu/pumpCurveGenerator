@@ -81,7 +81,6 @@ translations = {
         'download_plot': 'Download Plot (PNG)',
         
         # Plot elements
-        'plot_title': 'Pump Performance Curves',
         'flow_label': 'Flow ({})',
         'head_label': 'Head ({})',
         'system_curve': 'System Curve (H={}+{}×Q²)',
