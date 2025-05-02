@@ -896,7 +896,7 @@ def generate_pump_curve(df, frequency_option="Both", chart_style="Modern", show_
     # Add legend with model names and frequencies
     ax.legend(loc='upper right', fontsize=10, framealpha=0.7)
     
-    plt.title('Pump Performance Curves', fontsize=16, fontweight='bold', pad=20)
+    plt.title('', fontsize=16, fontweight='bold', pad=20)
     plt.tight_layout()
     
     return fig
