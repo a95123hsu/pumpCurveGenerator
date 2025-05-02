@@ -561,6 +561,46 @@ def handle_manual_input(frequency_option="Both"):
                 
                 # 60Hz values (20% higher flow)
                 template_flow_60hz[model] = [flow * 1.2 for flow in flows_50hz]
+        
+        # Create editable dataframes for each frequency
+        st.markdown("### Edit Pump Data Below")
+        
+        # Create tabs for each frequency
+        frequency_tabs = st.tabs([f"{freq} Data" for freq in frequencies_to_show])
+        
+        # Dictionary to store edited data for each frequency
+        edited_data = {}
+        
+        # Create data editor for each frequency
+        for i, freq in enumerate(frequencies_to_show):
+            with frequency_tabs[i]:
+                st.info(f"Edit {freq} pump data below. Head values are common across models.")
+                
+                # Create the base dataframe for this frequency
+                df_freq = pd.DataFrame({
+                    f'Head ({head_unit})': template_head
+                })
+                
+                # Add flow columns for each model
+                for model in model_names:
+                    if freq == "50Hz":
+                        df_freq[f'{model} Flow ({flow_unit})'] = template_flow_50hz[model]
+                    else:  # 60Hz
+                        df_freq[f'{model} Flow ({flow_unit})'] = template_flow_60hz[model]
+                
+                # Create a data editor for this frequency
+                edited_df = st.data_editor(
+                    df_freq, 
+                    use_container_width=True,
+                    num_rows="fixed",
+                    height=min(500, 70 + 40*num_points),
+                    key=f"data_editor_{freq}_{st.session_state.input_reset_key}",
+                    hide_index=False  # Show row indices for easier selection
+                )
+                
+                # Store the edited data
+                edited_data[freq] = edited_df
+        
         # Submit button and Refresh Form button
         col1, col2 = st.columns(2)
         with col1:
@@ -608,45 +648,6 @@ def handle_manual_input(frequency_option="Both"):
             return None
     
     return None
-        
-        # Create editable dataframes for each frequency
-        st.markdown("### Edit Pump Data Below")
-        
-        # Create tabs for each frequency
-        frequency_tabs = st.tabs([f"{freq} Data" for freq in frequencies_to_show])
-        
-        # Dictionary to store edited data for each frequency
-        edited_data = {}
-        
-        # Create data editor for each frequency
-        for i, freq in enumerate(frequencies_to_show):
-            with frequency_tabs[i]:
-                st.info(f"Edit {freq} pump data below. Head values are common across models.")
-                
-                # Create the base dataframe for this frequency
-                df_freq = pd.DataFrame({
-                    f'Head ({head_unit})': template_head
-                })
-                
-                # Add flow columns for each model
-                for model in model_names:
-                    if freq == "50Hz":
-                        df_freq[f'{model} Flow ({flow_unit})'] = template_flow_50hz[model]
-                    else:  # 60Hz
-                        df_freq[f'{model} Flow ({flow_unit})'] = template_flow_60hz[model]
-                
-                # Create a data editor for this frequency
-                edited_df = st.data_editor(
-                    df_freq, 
-                    use_container_width=True,
-                    num_rows="fixed",
-                    height=min(500, 70 + 40*num_points),
-                    key=f"data_editor_{freq}_{st.session_state.input_reset_key}",
-                    hide_index=False  # Show row indices for easier selection
-                )
-                
-                # Store the edited data
-                edited_data[freq] = edited_df
 
 def generate_pump_curve(df, frequency_option="Both", chart_style="Modern", show_system_curve=False, 
                        static_head=0.0, k_factor=0.0, refresh_counter=0, min_flow=0.0, max_flow=None,
