@@ -507,13 +507,7 @@ def handle_manual_input(frequency_option="Both"):
         refresh_data = None
         
         # Place the Refresh Form button before data editing
-        refresh_data = st.form_submit_button("Refresh Form")
-        
-        if refresh_data:
-            # Increment the reset key to force form refresh
-            st.session_state.input_reset_key += 1
-            # Return None to update the form
-            return None
+        refresh_data = st.form_submit_button("Refresh Form", on_click=lambda: setattr(st.session_state, 'input_reset_key', st.session_state.input_reset_key + 1))
         
         # Option to use template data
         use_template = st.checkbox("Use Template Data", value=True,
