@@ -22,7 +22,7 @@ def main():
     
     if 'chart_params' not in st.session_state:
         st.session_state.chart_params = {
-            'frequency': 50,
+            'show_both_frequencies': True,  # Show both 50Hz and 60Hz
             'chart_style': "Modern",
             'show_system_curve': False,
             'static_head': 2.0,
@@ -62,15 +62,14 @@ def main():
         
         # When any option changes, immediately update session state and trigger chart refresh
         with col_a:
-            frequency = st.selectbox(
-                "Frequency (Hz)", 
-                [50, 60], 
-                index=[50, 60].index(st.session_state.chart_params['frequency']),
-                key="frequency_select",
+            show_both_frequencies = st.checkbox(
+                "Show Both 50Hz & 60Hz", 
+                value=st.session_state.chart_params['show_both_frequencies'],
+                key="show_both_frequencies_checkbox",
                 on_change=lambda: (
                     setattr(
                         st.session_state, 'chart_params', 
-                        {**st.session_state.chart_params, 'frequency': st.session_state.frequency_select}
+                        {**st.session_state.chart_params, 'show_both_frequencies': st.session_state.show_both_frequencies_checkbox}
                     ),
                     update_chart_on_config_change()
                 )
@@ -259,13 +258,14 @@ def main():
                 if st.session_state.chart_generated:
                     params = st.session_state.chart_params
                     try:
+                        # Calculate both 50Hz and 60Hz data if requested
                         fig = generate_pump_curve(
                             df, 
-                            params['frequency'], 
-                            params['chart_style'], 
-                            params['show_system_curve'], 
-                            params['static_head'], 
-                            params['k_factor'],
+                            show_both_frequencies=params['show_both_frequencies'],
+                            chart_style=params['chart_style'], 
+                            show_system_curve=params['show_system_curve'], 
+                            static_head=params['static_head'], 
+                            k_factor=params['k_factor'],
                             min_flow=params['min_flow'],
                             max_flow=params['max_flow'],
                             min_head=params['min_head'],
@@ -316,6 +316,19 @@ def main():
           - Hs = Static head
           - k = Friction coefficient
           - Q = Flow rate
+        
+        ### Frequency Impact (50Hz vs 60Hz)
+        
+        Changing the electrical frequency affects pump performance:
+        
+        - Flow (Q) is proportional to speed (n): Q₂ = Q₁ × (n₂/n₁)
+        - Head (H) is proportional to speed squared: H₂ = H₁ × (n₂/n₁)²
+        - Power (P) is proportional to speed cubed: P₂ = P₁ × (n₂/n₁)³
+        
+        For 50Hz to 60Hz conversion:
+        - Flow increases by 20% (60/50 = 1.2)
+        - Head increases by 44% (1.2² = 1.44)
+        - Power increases by 73% (1.2³ = 1.728)
         
         ### Selecting the Right Pump
         
@@ -559,7 +572,7 @@ def handle_manual_input():
     
     return None
 
-def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curve=False, 
+def generate_pump_curve(df, show_both_frequencies=True, chart_style="Modern", show_system_curve=False, 
                        static_head=0.0, k_factor=0.0, refresh_counter=0, min_flow=0.0, max_flow=None,
                        min_head=0.0, max_head=None, show_grid=True):
     # Create a larger figure to prevent text overlap
@@ -587,52 +600,102 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
     for i, column in enumerate(head_cols):
         model_name = column.split(' ')[0]
         color = colors[i % len(colors)]
-        ax.plot(df[flow_col], df[column], linewidth=2.5, label=model_name, color=color)
+        
+        # Plot 50Hz curve
+        ax.plot(df[flow_col], df[column], linewidth=2.5, 
+                label=f"{model_name} (50Hz)", color=color)
+        
+        # Plot 60Hz curve if requested
+        if show_both_frequencies:
+            # Calculate 60Hz values from 50Hz values using affinity laws
+            # Flow increases by 20% (60/50 = 1.2)
+            # Head increases by 44% (1.2² = 1.44)
+            flow_60hz = df[flow_col] * 1.2
+            head_60hz = df[column] * 1.44
+            
+            # Plot 60Hz curve with dashed line
+            ax.plot(flow_60hz, head_60hz, linestyle='--', linewidth=2.5, 
+                    label=f"{model_name} (60Hz)", color=color)
         
         # Add model name label at the end of each curve
         last_idx = df[column].dropna().last_valid_index()
         if last_idx is not None:
+            # Add label for 50Hz
             x_pos = df[flow_col].iloc[last_idx]
             y_pos = df[column].iloc[last_idx]
-            # Add some padding to position the text
             x_padding = (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.02
-            ax.annotate(model_name, xy=(x_pos + x_padding, y_pos), 
+            ax.annotate(f"{model_name} (50Hz)", xy=(x_pos + x_padding, y_pos), 
                         color=color, fontweight='bold', va='center')
+            
+            # Add label for 60Hz if shown
+            if show_both_frequencies:
+                x_pos_60 = flow_60hz.iloc[last_idx]
+                y_pos_60 = head_60hz.iloc[last_idx]
+                ax.annotate(f"{model_name} (60Hz)", xy=(x_pos_60 + x_padding, y_pos_60), 
+                            color=color, fontweight='bold', va='center')
     
     # Add system curve if requested
     if show_system_curve:
-        max_flow_val = df[flow_col].max() * 1.2 if max_flow is None else max_flow
+        max_flow_val = df[flow_col].max() * 1.5 if max_flow is None else max_flow  # Extend for 60Hz curves
         system_flows = np.linspace(0, max_flow_val, 100)
         system_heads = static_head + k_factor * (system_flows ** 2)
         
         # Plot system curve with dashed line
-        ax.plot(system_flows, system_heads, 'r--', linewidth=2, 
+        ax.plot(system_flows, system_heads, 'r-', linewidth=2, 
                 label=f'System Curve (H={static_head}+{k_factor:.6f}×Q²)')
         
-        # Find and plot intersection points
-        for column in head_cols:
+        # Find and plot intersection points for both frequencies
+        for i, column in enumerate(head_cols):
             model_name = column.split(' ')[0]
-            # Interpolate pump curve
-            pump_heads = np.interp(system_flows, df[flow_col], df[column], left=np.nan, right=np.nan)
-            # Calculate difference
-            diff = np.abs(pump_heads - system_heads)
-            valid_idx = ~np.isnan(diff)
-            if np.any(valid_idx):
-                op_idx = np.argmin(diff[valid_idx])
-                op_flow = system_flows[valid_idx][op_idx]
-                op_head = pump_heads[valid_idx][op_idx]
+            color = colors[i % len(colors)]
+            
+            # 50Hz intersections
+            pump_heads_50hz = np.interp(system_flows, df[flow_col], df[column], left=np.nan, right=np.nan)
+            diff_50hz = np.abs(pump_heads_50hz - system_heads)
+            valid_idx_50hz = ~np.isnan(diff_50hz)
+            if np.any(valid_idx_50hz):
+                op_idx_50hz = np.argmin(diff_50hz[valid_idx_50hz])
+                op_flow_50hz = system_flows[valid_idx_50hz][op_idx_50hz]
+                op_head_50hz = pump_heads_50hz[valid_idx_50hz][op_idx_50hz]
                 
-                # Plot operating point
-                ax.plot(op_flow, op_head, 'o', markersize=8, 
-                        color=colors[list(head_cols).index(column) % len(colors)])
+                # Plot 50Hz operating point
+                ax.plot(op_flow_50hz, op_head_50hz, 'o', markersize=8, 
+                        color=color)
                 
-                # Add operating point annotation
-                ax.annotate(f"({op_flow:.1f}, {op_head:.1f})",
-                           xy=(op_flow, op_head),
-                           xytext=(10, 10),
+                # Add 50Hz operating point annotation
+                ax.annotate(f"50Hz: ({op_flow_50hz:.1f}, {op_head_50hz:.1f})",
+                           xy=(op_flow_50hz, op_head_50hz),
+                           xytext=(10, 0),
                            textcoords='offset points',
-                           color=colors[list(head_cols).index(column) % len(colors)],
+                           color=color,
                            fontweight='bold')
+            
+            # 60Hz intersections (if shown)
+            if show_both_frequencies:
+                # Calculate 60Hz flow and head from 50Hz data
+                flow_60hz = df[flow_col] * 1.2
+                head_60hz = df[column] * 1.44
+                
+                # Interpolate for 60Hz curve
+                pump_heads_60hz = np.interp(system_flows, flow_60hz, head_60hz, left=np.nan, right=np.nan)
+                diff_60hz = np.abs(pump_heads_60hz - system_heads)
+                valid_idx_60hz = ~np.isnan(diff_60hz)
+                if np.any(valid_idx_60hz):
+                    op_idx_60hz = np.argmin(diff_60hz[valid_idx_60hz])
+                    op_flow_60hz = system_flows[valid_idx_60hz][op_idx_60hz]
+                    op_head_60hz = pump_heads_60hz[valid_idx_60hz][op_idx_60hz]
+                    
+                    # Plot 60Hz operating point
+                    ax.plot(op_flow_60hz, op_head_60hz, 's', markersize=8, 
+                            color=color)
+                    
+                    # Add 60Hz operating point annotation
+                    ax.annotate(f"60Hz: ({op_flow_60hz:.1f}, {op_head_60hz:.1f})",
+                               xy=(op_flow_60hz, op_head_60hz),
+                               xytext=(10, 10),
+                               textcoords='offset points',
+                               color=color,
+                               fontweight='bold')
     
     # Set up the primary x and y axes
     ax.set_xlabel(f'Flow ({flow_unit})', fontsize=12, fontweight='bold')
@@ -659,15 +722,23 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
     ax.yaxis.set_minor_locator(AutoMinorLocator())
     
     # Apply custom axis limits if provided
-    # Set x-axis limits
+    # Set x-axis limits with expanded range for 60Hz curves
+    max_flow_data = df[flow_col].max()
+    if show_both_frequencies:
+        max_flow_data *= 1.3  # Add 30% more space for 60Hz curves
+        
     if max_flow is None:
-        ax.set_xlim(left=float(min_flow))
+        ax.set_xlim(left=float(min_flow), right=max_flow_data * 1.1)
     else:
         ax.set_xlim(left=float(min_flow), right=float(max_flow))
     
-    # Set y-axis limits
+    # Set y-axis limits with expanded range for 60Hz curves
+    max_head_data = max([df[col].max() for col in head_cols])
+    if show_both_frequencies:
+        max_head_data *= 1.5  # Add 50% more space for 60Hz curves
+    
     if max_head is None:
-        ax.set_ylim(bottom=float(min_head))
+        ax.set_ylim(bottom=float(min_head), top=max_head_data * 1.1)
     else:
         ax.set_ylim(bottom=float(min_head), top=float(max_head))
     
@@ -711,13 +782,25 @@ def generate_pump_curve(df, frequency=50, chart_style="Modern", show_system_curv
         ax_m.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
         ax_m.set_ylabel(f'Head (m)', fontsize=12, fontweight='bold', labelpad=15)
     
-    # Add frequency information
-    plt.text(0.05, 0.95, f"{frequency}Hz", 
-             transform=ax.transAxes, 
-             fontsize=14, 
-             bbox=dict(facecolor='white', alpha=0.7, boxstyle='round'))
+    # Add frequency information - Always at top left corner
+    if show_both_frequencies:
+        plt.text(0.02, 0.98, "50Hz / 60Hz", 
+                 transform=ax.transAxes, 
+                 fontsize=14,
+                 fontweight='bold',
+                 horizontalalignment='left',
+                 verticalalignment='top',
+                 bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.5'))
+    else:
+        plt.text(0.02, 0.98, "50Hz", 
+                 transform=ax.transAxes, 
+                 fontsize=14,
+                 fontweight='bold',
+                 horizontalalignment='left',
+                 verticalalignment='top',
+                 bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.5'))
     
-    # Add legend with model names
+    # Add legend with model names and frequencies
     ax.legend(loc='upper right', fontsize=10, framealpha=0.7)
     
     plt.title('Pump Performance Curves', fontsize=16, fontweight='bold', pad=20)
