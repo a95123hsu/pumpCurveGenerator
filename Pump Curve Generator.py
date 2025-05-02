@@ -578,8 +578,13 @@ def handle_manual_input(frequency_option="Both"):
                 # Store the edited data
                 edited_data[freq] = edited_df
         
-        # Submit button
-        submitted = st.form_submit_button("Generate Pump Curve")
+        # Submit button and Refresh Form button
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button("Generate Pump Curve")
+        with col2:
+            # Keep the Refresh Form button
+            refresh_data = st.form_submit_button("Refresh Form")
         
         if submitted:
             # Transform the edited data back into the format needed for plotting
@@ -613,6 +618,9 @@ def handle_manual_input(frequency_option="Both"):
             # Automatically generate the chart when data is submitted
             st.session_state.chart_generated = True
             return transformed_df
+        elif refresh_data:
+            # Just return the current data to update the form
+            return None
     
     return None
 
@@ -653,7 +661,6 @@ def generate_pump_curve(df, frequency_option="Both", chart_style="Modern", show_
         frequencies_to_plot = ['60Hz']
     else:  # "Both" or mixed case
         frequencies_to_plot = frequencies_present
-    
     # Get all head columns
     head_cols = [col for col in df.columns if 'Head' in col]
     
@@ -677,6 +684,7 @@ def generate_pump_curve(df, frequency_option="Both", chart_style="Modern", show_
         # Skip if frequency not selected to plot
         if freq not in frequencies_to_plot:
             continue
+            
         # Get column unit
         head_unit = col.split('(')[-1].split(')')[0]
         
