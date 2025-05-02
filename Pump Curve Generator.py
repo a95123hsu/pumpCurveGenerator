@@ -22,7 +22,7 @@ def main():
     
     if 'chart_params' not in st.session_state:
         st.session_state.chart_params = {
-            'show_both_frequencies': True,  # Show both 50Hz and 60Hz
+            'frequency_option': "Both",  # Default to showing both frequencies
             'chart_style': "Modern",
             'show_system_curve': False,
             'static_head': 2.0,
@@ -62,14 +62,15 @@ def main():
         
         # When any option changes, immediately update session state and trigger chart refresh
         with col_a:
-            show_both_frequencies = st.checkbox(
-                "Show Both 50Hz & 60Hz", 
-                value=st.session_state.chart_params['show_both_frequencies'],
-                key="show_both_frequencies_checkbox",
+            frequency_option = st.selectbox(
+                "Frequency Display", 
+                ["50Hz Only", "60Hz Only", "Both"],
+                index=["50Hz Only", "60Hz Only", "Both"].index(st.session_state.chart_params.get('frequency_option', "Both")),
+                key="frequency_option_select",
                 on_change=lambda: (
                     setattr(
                         st.session_state, 'chart_params', 
-                        {**st.session_state.chart_params, 'show_both_frequencies': st.session_state.show_both_frequencies_checkbox}
+                        {**st.session_state.chart_params, 'frequency_option': st.session_state.frequency_option_select}
                     ),
                     update_chart_on_config_change()
                 )
@@ -241,7 +242,7 @@ def main():
         if input_method == "Upload CSV":
             df = handle_csv_upload()
         else:
-            df = handle_manual_input()
+            df = handle_manual_input(st.session_state.chart_params.get('frequency_option', "Both"))
         
         # Generate and display the pump curve if data is available
         if df is not None and not df.empty:
@@ -258,10 +259,10 @@ def main():
                 if st.session_state.chart_generated:
                     params = st.session_state.chart_params
                     try:
-                        # Calculate both 50Hz and 60Hz data if requested
+                        # Pass frequency option to the plotting function
                         fig = generate_pump_curve(
                             df, 
-                            show_both_frequencies=params['show_both_frequencies'],
+                            frequency_option=params.get('frequency_option', "Both"),
                             chart_style=params['chart_style'], 
                             show_system_curve=params['show_system_curve'], 
                             static_head=params['static_head'], 
@@ -346,16 +347,18 @@ def handle_csv_upload():
     # File uploader
     uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
     
-    # Sample CSV template for download - Using head values as primary axis
+    # Sample CSV template for download - Updated to include both 50Hz and 60Hz data
     sample_data = pd.DataFrame({
         'Head (ft)': [4.8, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 49.8],
-        'Model-A Flow (GPM)': [90.09, 89.96, 84.81, 77.43, 69.85, 61.89, 53.93, 41.81, 29.34, 18.52, 8.45],
-        'Model-B Flow (GPM)': [105.50, 104.75, 95.22, 86.34, 78.43, 69.45, 60.76, 48.45, 35.21, 21.93, 11.24]
+        'Model-A 50Hz Flow (GPM)': [90.09, 89.96, 84.81, 77.43, 69.85, 61.89, 53.93, 41.81, 29.34, 18.52, 8.45],
+        'Model-A 60Hz Flow (GPM)': [108.11, 107.95, 101.77, 92.92, 83.82, 74.27, 64.72, 50.17, 35.21, 22.22, 10.14],
+        'Model-B 50Hz Flow (GPM)': [105.50, 104.75, 95.22, 86.34, 78.43, 69.45, 60.76, 48.45, 35.21, 21.93, 11.24],
+        'Model-B 60Hz Flow (GPM)': [126.60, 125.70, 114.26, 103.61, 94.12, 83.34, 72.91, 58.14, 42.25, 26.32, 13.49]
     })
     
     st.markdown("### Download Sample CSV Template")
     
-    # Create template
+    # Create template with both frequencies
     csv_standard = sample_data.to_csv(index=False)
     b64_standard = base64.b64encode(csv_standard.encode()).decode()
     href_standard = f'<a href="data:file/csv;base64,{b64_standard}" download="pump_curve_template.csv">Download CSV Template</a>'
@@ -367,41 +370,74 @@ def handle_csv_upload():
             df = pd.read_csv(uploaded_file)
             
             # Transform the data into format needed for plotting (Head vs Flow)
-            # Need to transpose it for the traditional pump curve format expected by the plotting function
-            
-            # Check if data is in Head-first, Flow-second format
             if 'Head' in df.columns[0]:
-                st.info("Converting Head-Flow format to standard format for pump curve generation.")
+                st.info("Detected head-first format data. Converting to the format needed for the chart.")
                 
                 # Extract head values and units
                 head_col = df.columns[0]
                 head_unit = head_col.split('(')[-1].split(')')[0]
                 head_values = df[head_col].values
                 
-                # Create new DataFrame in the format needed for plotting
+                # Create new DataFrame for transformed data
                 transformed_df = pd.DataFrame()
                 
-                # Find all flow columns and add them to the transformed DF
+                # Get all flow columns
                 flow_cols = [col for col in df.columns if 'Flow' in col]
+                
                 if not flow_cols:
-                    st.warning("No flow columns detected. Please ensure your CSV has column names like 'Model-X Flow (GPM)'")
+                    st.warning("No flow columns detected in the CSV. Please ensure column names contain 'Flow'.")
                     return None
                 
-                # Extract flow unit from first flow column
-                flow_unit = flow_cols[0].split('(')[-1].split(')')[0]
+                # Process columns by model and frequency
+                model_freq_dict = {}
                 
-                # For each model's flow, create a new column with the head values
-                for flow_col in flow_cols:
-                    model_name = flow_col.split(' ')[0]  # Extract model name
-                    flow_values = df[flow_col].values
+                # Identify models and their frequencies from column names
+                for col in flow_cols:
+                    parts = col.split(' ')
+                    model_name = parts[0]  # Extract model name
                     
-                    # Add to new dataframe in the format needed for plotting
-                    if len(transformed_df) == 0:
-                        # First model, initialize with flow column
-                        transformed_df[f'Flow ({flow_unit})'] = flow_values
+                    # Check if column has frequency info
+                    frequency = None
+                    for part in parts:
+                        if '50Hz' in part:
+                            frequency = '50Hz'
+                            break
+                        elif '60Hz' in part:
+                            frequency = '60Hz'
+                            break
                     
-                    # Add head column for this model
-                    transformed_df[f'{model_name} Head ({head_unit})'] = head_values
+                    # If no frequency specified, assume 50Hz
+                    if frequency is None:
+                        frequency = '50Hz'
+                    
+                    # Group by model and frequency
+                    if model_name not in model_freq_dict:
+                        model_freq_dict[model_name] = {}
+                    
+                    model_freq_dict[model_name][frequency] = df[col].values
+                
+                # Create new structure for transformed data
+                for model_name, freq_data in model_freq_dict.items():
+                    # Get flow unit from first flow column
+                    flow_unit = flow_cols[0].split('(')[-1].split(')')[0]
+                    
+                    # Add 50Hz data if available
+                    if '50Hz' in freq_data:
+                        # If first model, initialize flow column
+                        if len(transformed_df) == 0:
+                            transformed_df[f'Flow ({flow_unit})'] = freq_data['50Hz']
+                        
+                        # Add head column for this model at 50Hz
+                        transformed_df[f'{model_name} 50Hz Head ({head_unit})'] = head_values
+                    
+                    # Add 60Hz data if available
+                    if '60Hz' in freq_data:
+                        # If no 50Hz data and first model, initialize flow column
+                        if '50Hz' not in freq_data and len(transformed_df) == 0:
+                            transformed_df[f'Flow ({flow_unit})'] = freq_data['60Hz']
+                        
+                        # Add head column for this model at 60Hz
+                        transformed_df[f'{model_name} 60Hz Head ({head_unit})'] = head_values
                 
                 df = transformed_df
             
@@ -420,7 +456,7 @@ def handle_csv_upload():
     
     return None
 
-def handle_manual_input():
+def handle_manual_input(frequency_option="Both"):
     st.subheader("Manual Data Input")
     
     # Initialize session state for manually input data if it doesn't exist
@@ -455,27 +491,41 @@ def handle_manual_input():
                                       key=f"model_name_{i}_{st.session_state.input_reset_key}")
             model_names.append(model_name)
         
+        # Frequencies to display (based on frequency_option)
+        frequencies_to_show = []
+        if frequency_option == "50Hz Only" or frequency_option == "Both":
+            frequencies_to_show.append("50Hz")
+        if frequency_option == "60Hz Only" or frequency_option == "Both":
+            frequencies_to_show.append("60Hz")
+            
         # Option to use template data
         use_template = st.checkbox("Use Template Data", value=True,
                                  key=f"use_template_{st.session_state.input_reset_key}")
         
+        # Template data for different frequencies
         if use_template:
-            # Use the data provided by the user - common head values for all models
+            # Common head values for all models
             num_points = 11
             template_head = [4.8, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 49.8]
             
-            # Flow values for the first model
-            template_flow_model_A = [90.09, 89.96, 84.81, 77.43, 69.85, 61.89, 53.93, 41.81, 29.34, 18.52, 8.45]
+            # Flow values for each model at 50Hz
+            template_flow_50hz = {
+                model_names[0]: [90.09, 89.96, 84.81, 77.43, 69.85, 61.89, 53.93, 41.81, 29.34, 18.52, 8.45],
+            }
             
-            # Pre-calculate flow values for other models (increased capacity)
-            template_flow_models = {}
+            # Flow values for each model at 60Hz
+            template_flow_60hz = {
+                model_names[0]: [108.11, 107.95, 101.77, 92.92, 83.82, 74.27, 64.72, 50.17, 35.21, 22.22, 10.14],
+            }
+            
+            # Generate values for other models
             for i, model in enumerate(model_names):
-                if i == 0:
-                    template_flow_models[model] = template_flow_model_A
-                else:
-                    # Each subsequent model has slightly higher flow at same head points
+                if i > 0:  # Skip first model which is already set
                     multiplier = 1.0 + (0.15 * i)  # 15% increase for each model
-                    template_flow_models[model] = [flow * multiplier for flow in template_flow_model_A]
+                    
+                    # Apply multiplier to base model flow values
+                    template_flow_50hz[model] = [flow * multiplier for flow in template_flow_50hz[model_names[0]]]
+                    template_flow_60hz[model] = [flow * multiplier for flow in template_flow_60hz[model_names[0]]]
         else:
             # Number of data points
             num_points = st.number_input("Number of Data Points", min_value=3, max_value=20, value=8,
@@ -484,52 +534,60 @@ def handle_manual_input():
             # Generate default head values (common for all models)
             template_head = np.linspace(5.0, 50.0, num_points).tolist()
             
-            # Generate flow values for each model
-            template_flow_models = {}
-            base_flow = 90.0  # Starting flow for first model
+            # Generate flow values for each model at different frequencies
+            template_flow_50hz = {}
+            template_flow_60hz = {}
+            base_flow_50hz = 90.0  # Starting flow for first model at 50Hz
             
             for i, model in enumerate(model_names):
-                # Generate decreasing flow as head increases
-                max_flow = base_flow * (1.0 + 0.15 * i)  # Increase capacity for each model
-                min_flow = max_flow * 0.1  # End at 10% of max flow
-                flows = np.linspace(max_flow, min_flow, num_points).tolist()
-                template_flow_models[model] = flows
+                # Generate decreasing flow as head increases for 50Hz
+                max_flow_50hz = base_flow_50hz * (1.0 + 0.15 * i)  # Increase capacity for each model
+                min_flow_50hz = max_flow_50hz * 0.1  # End at 10% of max flow
+                
+                # 50Hz values
+                flows_50hz = np.linspace(max_flow_50hz, min_flow_50hz, num_points).tolist()
+                template_flow_50hz[model] = flows_50hz
+                
+                # 60Hz values (20% higher flow)
+                template_flow_60hz[model] = [flow * 1.2 for flow in flows_50hz]
         
-        # Transform the data into standard "Flow vs. Head" format for plotting
-        columns = [f'Flow ({flow_unit})']
-        for name in model_names:
-            columns.append(f"{name} Head ({head_unit})")
-        
-        # Start with empty dataframe
-        transformed_data = pd.DataFrame()
-        
-        # For each model, create a separate row in the transformed dataframe
-        for i, model in enumerate(model_names):
-            # Create flow column for this model
-            if i == 0:
-                # First model sets up the flow column
-                transformed_data[columns[0]] = template_flow_models[model]
-            
-            # All models share the same head values
-            transformed_data[f"{model} Head ({head_unit})"] = template_head
-        
-        # Create an editable table with a unique key
+        # Create editable dataframes for each frequency
         st.markdown("### Edit Pump Data Below")
-        st.info("Note: Common head values across all models. Adjust flow values for each model at the same head point.")
         
-        # Display the original head-flow data for editing
-        head_flow_df = pd.DataFrame({
-            f'Head ({head_unit})': template_head
-        })
+        # Create tabs for each frequency
+        frequency_tabs = st.tabs([f"{freq} Data" for freq in frequencies_to_show])
         
-        # Add flow columns for each model
-        for model in model_names:
-            head_flow_df[f'{model} Flow ({flow_unit})'] = template_flow_models[model]
+        # Dictionary to store edited data for each frequency
+        edited_data = {}
         
-        edited_df = st.data_editor(head_flow_df, use_container_width=True, 
-                                  num_rows="fixed", 
-                                  height=min(500, 70 + 40*num_points),
-                                  key=f"data_editor_{st.session_state.input_reset_key}")
+        # Create data editor for each frequency
+        for i, freq in enumerate(frequencies_to_show):
+            with frequency_tabs[i]:
+                st.info(f"Edit {freq} pump data below. Head values are common across models.")
+                
+                # Create the base dataframe for this frequency
+                df_freq = pd.DataFrame({
+                    f'Head ({head_unit})': template_head
+                })
+                
+                # Add flow columns for each model
+                for model in model_names:
+                    if freq == "50Hz":
+                        df_freq[f'{model} Flow ({flow_unit})'] = template_flow_50hz[model]
+                    else:  # 60Hz
+                        df_freq[f'{model} Flow ({flow_unit})'] = template_flow_60hz[model]
+                
+                # Create a data editor for this frequency
+                edited_df = st.data_editor(
+                    df_freq, 
+                    use_container_width=True,
+                    num_rows="fixed",
+                    height=min(500, 70 + 40*num_points),
+                    key=f"data_editor_{freq}_{st.session_state.input_reset_key}"
+                )
+                
+                # Store the edited data
+                edited_data[freq] = edited_df
         
         # Submit button
         col1, col2 = st.columns(2)
@@ -543,25 +601,30 @@ def handle_manual_input():
             # Transform the edited data back into the format needed for plotting
             transformed_df = pd.DataFrame()
             
-            # Extract data from the edited dataframe
-            head_col = edited_df.columns[0]
-            head_values = edited_df[head_col].values
-            
-            # Get flow columns
-            flow_cols = [col for col in edited_df.columns if 'Flow' in col]
-            
-            # For each model, create a row in the transformed dataframe
-            for i, flow_col in enumerate(flow_cols):
-                model_name = flow_col.split(' ')[0]  # Extract model name
-                flow_values = edited_df[flow_col].values
-                
-                # Add to new dataframe in the format needed for plotting
-                if i == 0:
-                    # First model, initialize with flow column
-                    transformed_df[f'Flow ({flow_unit})'] = flow_values
-                
-                # Add head column for this model
-                transformed_df[f'{model_name} Head ({head_unit})'] = head_values
+            # Process data for each frequency
+            for freq in frequencies_to_show:
+                if freq in edited_data:
+                    df_freq = edited_data[freq]
+                    
+                    # Extract head values
+                    head_col = df_freq.columns[0]
+                    head_values = df_freq[head_col].values
+                    
+                    # Get flow columns
+                    flow_cols = [col for col in df_freq.columns if 'Flow' in col]
+                    
+                    # Process each model's flow column
+                    for flow_col in flow_cols:
+                        model_name = flow_col.split(' ')[0]  # Extract model name
+                        flow_values = df_freq[flow_col].values
+                        
+                        # Add to transformed dataframe
+                        if len(transformed_df) == 0:
+                            # First frequency and model, initialize with flow column
+                            transformed_df[f'Flow ({flow_unit})'] = flow_values
+                        
+                        # Add head column for this model and frequency
+                        transformed_df[f'{model_name} {freq} Head ({head_unit})'] = head_values
             
             # Automatically generate the chart when data is submitted
             st.session_state.chart_generated = True
@@ -572,7 +635,7 @@ def handle_manual_input():
     
     return None
 
-def generate_pump_curve(df, show_both_frequencies=True, chart_style="Modern", show_system_curve=False, 
+def generate_pump_curve(df, frequency_option="Both", chart_style="Modern", show_system_curve=False, 
                        static_head=0.0, k_factor=0.0, refresh_counter=0, min_flow=0.0, max_flow=None,
                        min_head=0.0, max_head=None, show_grid=True):
     # Create a larger figure to prevent text overlap
@@ -590,112 +653,133 @@ def generate_pump_curve(df, show_both_frequencies=True, chart_style="Modern", sh
     flow_col = df.columns[0]
     flow_unit = flow_col.split('(')[-1].split(')')[0]
     
-    head_cols = df.columns[1:]
-    head_unit = head_cols[0].split('(')[-1].split(')')[0]
+    # Determine which frequencies to plot based on data and user selection
+    frequencies_present = []
+    if any('50Hz' in col for col in df.columns):
+        frequencies_present.append('50Hz')
+    if any('60Hz' in col for col in df.columns):
+        frequencies_present.append('60Hz')
+    
+    # If no frequency specified in columns, assume 50Hz only
+    if not frequencies_present:
+        frequencies_present = ['50Hz']
+        
+    # Filter frequencies based on user selection
+    frequencies_to_plot = []
+    if frequency_option == "50Hz Only" and '50Hz' in frequencies_present:
+        frequencies_to_plot = ['50Hz']
+    elif frequency_option == "60Hz Only" and '60Hz' in frequencies_present:
+        frequencies_to_plot = ['60Hz']
+    else:  # "Both" or mixed case
+        frequencies_to_plot = frequencies_present
+    
+    # Get all head columns
+    head_cols = [col for col in df.columns if 'Head' in col]
+    
+    # Group columns by model and frequency
+    model_data = {}
+    for col in head_cols:
+        parts = col.split(' ')
+        model_name = parts[0]  # Extract model name
+        
+        # Find frequency in the column name
+        freq = None
+        for part in parts:
+            if part in ['50Hz', '60Hz']:
+                freq = part
+                break
+        
+        # If no frequency found, assume 50Hz
+        if freq is None:
+            freq = '50Hz'
+            
+        # Skip if frequency not selected to plot
+        if freq not in frequencies_to_plot:
+            continue
+            
+        # Get column unit
+        head_unit = col.split('(')[-1].split(')')[0]
+        
+        # Create model entry if doesn't exist
+        if model_name not in model_data:
+            model_data[model_name] = {}
+            
+        # Store data for this model and frequency
+        model_data[model_name][freq] = df[col].values
     
     # Get color cycle for plots
     colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     
-    # Plot each pump curve with distinct colors and line styles
-    for i, column in enumerate(head_cols):
-        model_name = column.split(' ')[0]
+    # Plot each pump model with distinct colors, with different line styles for frequencies
+    model_names = list(model_data.keys())
+    for i, model_name in enumerate(model_names):
         color = colors[i % len(colors)]
         
-        # Plot 50Hz curve
-        ax.plot(df[flow_col], df[column], linewidth=2.5, 
-                label=f"{model_name} (50Hz)", color=color)
-        
-        # Plot 60Hz curve if requested
-        if show_both_frequencies:
-            # Calculate 60Hz values from 50Hz values using affinity laws
-            # Flow increases by 20% (60/50 = 1.2)
-            # Head increases by 44% (1.2² = 1.44)
-            flow_60hz = df[flow_col] * 1.2
-            head_60hz = df[column] * 1.44
-            
-            # Plot 60Hz curve with dashed line
-            ax.plot(flow_60hz, head_60hz, linestyle='--', linewidth=2.5, 
-                    label=f"{model_name} (60Hz)", color=color)
-        
-        # Add model name label at the end of each curve
-        last_idx = df[column].dropna().last_valid_index()
-        if last_idx is not None:
-            # Add label for 50Hz
-            x_pos = df[flow_col].iloc[last_idx]
-            y_pos = df[column].iloc[last_idx]
-            x_padding = (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.02
-            ax.annotate(f"{model_name} (50Hz)", xy=(x_pos + x_padding, y_pos), 
-                        color=color, fontweight='bold', va='center')
-            
-            # Add label for 60Hz if shown
-            if show_both_frequencies:
-                x_pos_60 = flow_60hz.iloc[last_idx]
-                y_pos_60 = head_60hz.iloc[last_idx]
-                ax.annotate(f"{model_name} (60Hz)", xy=(x_pos_60 + x_padding, y_pos_60), 
-                            color=color, fontweight='bold', va='center')
+        # Plot different frequencies with different line styles
+        for freq in frequencies_to_plot:
+            if freq in model_data[model_name]:
+                # Set line style based on frequency
+                line_style = '-' if freq == '50Hz' else '--'
+                
+                # Plot curve for this model and frequency
+                ax.plot(df[flow_col], model_data[model_name][freq], 
+                        linestyle=line_style, linewidth=2.5, 
+                        label=f"{model_name} ({freq})", color=color)
+                
+                # Add model name and frequency label at the end of each curve
+                last_idx = len(model_data[model_name][freq]) - 1
+                if last_idx >= 0:
+                    x_pos = df[flow_col].iloc[last_idx]
+                    y_pos = model_data[model_name][freq][last_idx]
+                    x_padding = (ax.get_xlim()[1] - ax.get_xlim()[0]) * 0.02
+                    ax.annotate(f"{model_name} ({freq})", 
+                                xy=(x_pos + x_padding, y_pos), 
+                                color=color, fontweight='bold', va='center')
     
     # Add system curve if requested
     if show_system_curve:
-        max_flow_val = df[flow_col].max() * 1.5 if max_flow is None else max_flow  # Extend for 60Hz curves
+        max_flow_val = df[flow_col].max() * 1.5 if max_flow is None else max_flow
         system_flows = np.linspace(0, max_flow_val, 100)
         system_heads = static_head + k_factor * (system_flows ** 2)
         
-        # Plot system curve with dashed line
+        # Plot system curve with red line
         ax.plot(system_flows, system_heads, 'r-', linewidth=2, 
                 label=f'System Curve (H={static_head}+{k_factor:.6f}×Q²)')
         
-        # Find and plot intersection points for both frequencies
-        for i, column in enumerate(head_cols):
-            model_name = column.split(' ')[0]
+        # Find and plot intersection points for all models and frequencies
+        for i, model_name in enumerate(model_names):
             color = colors[i % len(colors)]
             
-            # 50Hz intersections
-            pump_heads_50hz = np.interp(system_flows, df[flow_col], df[column], left=np.nan, right=np.nan)
-            diff_50hz = np.abs(pump_heads_50hz - system_heads)
-            valid_idx_50hz = ~np.isnan(diff_50hz)
-            if np.any(valid_idx_50hz):
-                op_idx_50hz = np.argmin(diff_50hz[valid_idx_50hz])
-                op_flow_50hz = system_flows[valid_idx_50hz][op_idx_50hz]
-                op_head_50hz = pump_heads_50hz[valid_idx_50hz][op_idx_50hz]
-                
-                # Plot 50Hz operating point
-                ax.plot(op_flow_50hz, op_head_50hz, 'o', markersize=8, 
-                        color=color)
-                
-                # Add 50Hz operating point annotation
-                ax.annotate(f"50Hz: ({op_flow_50hz:.1f}, {op_head_50hz:.1f})",
-                           xy=(op_flow_50hz, op_head_50hz),
-                           xytext=(10, 0),
-                           textcoords='offset points',
-                           color=color,
-                           fontweight='bold')
-            
-            # 60Hz intersections (if shown)
-            if show_both_frequencies:
-                # Calculate 60Hz flow and head from 50Hz data
-                flow_60hz = df[flow_col] * 1.2
-                head_60hz = df[column] * 1.44
-                
-                # Interpolate for 60Hz curve
-                pump_heads_60hz = np.interp(system_flows, flow_60hz, head_60hz, left=np.nan, right=np.nan)
-                diff_60hz = np.abs(pump_heads_60hz - system_heads)
-                valid_idx_60hz = ~np.isnan(diff_60hz)
-                if np.any(valid_idx_60hz):
-                    op_idx_60hz = np.argmin(diff_60hz[valid_idx_60hz])
-                    op_flow_60hz = system_flows[valid_idx_60hz][op_idx_60hz]
-                    op_head_60hz = pump_heads_60hz[valid_idx_60hz][op_idx_60hz]
+            for freq in frequencies_to_plot:
+                if freq in model_data[model_name]:
+                    # Get pump curve data
+                    pump_heads = model_data[model_name][freq]
                     
-                    # Plot 60Hz operating point
-                    ax.plot(op_flow_60hz, op_head_60hz, 's', markersize=8, 
-                            color=color)
+                    # Interpolate pump curve for intersection
+                    pump_heads_interp = np.interp(system_flows, df[flow_col], pump_heads, 
+                                                 left=np.nan, right=np.nan)
                     
-                    # Add 60Hz operating point annotation
-                    ax.annotate(f"60Hz: ({op_flow_60hz:.1f}, {op_head_60hz:.1f})",
-                               xy=(op_flow_60hz, op_head_60hz),
-                               xytext=(10, 10),
-                               textcoords='offset points',
-                               color=color,
-                               fontweight='bold')
+                    # Find intersection point
+                    diff = np.abs(pump_heads_interp - system_heads)
+                    valid_idx = ~np.isnan(diff)
+                    if np.any(valid_idx):
+                        op_idx = np.argmin(diff[valid_idx])
+                        op_flow = system_flows[valid_idx][op_idx]
+                        op_head = pump_heads_interp[valid_idx][op_idx]
+                        
+                        # Set marker style based on frequency
+                        marker_style = 'o' if freq == '50Hz' else 's'
+                        
+                        # Plot operating point
+                        ax.plot(op_flow, op_head, marker_style, markersize=8, color=color)
+                        
+                        # Add operating point annotation
+                        ax.annotate(f"{freq}: ({op_flow:.1f}, {op_head:.1f})",
+                                   xy=(op_flow, op_head),
+                                   xytext=(10, (5 if freq == '50Hz' else -15)),
+                                   textcoords='offset points',
+                                   color=color,
+                                   fontweight='bold')
     
     # Set up the primary x and y axes
     ax.set_xlabel(f'Flow ({flow_unit})', fontsize=12, fontweight='bold')
@@ -722,23 +806,21 @@ def generate_pump_curve(df, show_both_frequencies=True, chart_style="Modern", sh
     ax.yaxis.set_minor_locator(AutoMinorLocator())
     
     # Apply custom axis limits if provided
-    # Set x-axis limits with expanded range for 60Hz curves
-    max_flow_data = df[flow_col].max()
-    if show_both_frequencies:
-        max_flow_data *= 1.3  # Add 30% more space for 60Hz curves
-        
+    # Set x-axis limits with expanded range for all data
     if max_flow is None:
-        ax.set_xlim(left=float(min_flow), right=max_flow_data * 1.1)
+        ax.set_xlim(left=float(min_flow), right=df[flow_col].max() * 1.1)
     else:
         ax.set_xlim(left=float(min_flow), right=float(max_flow))
     
-    # Set y-axis limits with expanded range for 60Hz curves
-    max_head_data = max([df[col].max() for col in head_cols])
-    if show_both_frequencies:
-        max_head_data *= 1.5  # Add 50% more space for 60Hz curves
-    
+    # Set y-axis limits
     if max_head is None:
-        ax.set_ylim(bottom=float(min_head), top=max_head_data * 1.1)
+        # Find maximum head across all models and frequencies
+        max_head_val = 0
+        for model_name in model_data:
+            for freq in model_data[model_name]:
+                max_head_val = max(max_head_val, np.max(model_data[model_name][freq]))
+                
+        ax.set_ylim(bottom=float(min_head), top=max_head_val * 1.1)
     else:
         ax.set_ylim(bottom=float(min_head), top=float(max_head))
     
@@ -782,23 +864,21 @@ def generate_pump_curve(df, show_both_frequencies=True, chart_style="Modern", sh
         ax_m.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
         ax_m.set_ylabel(f'Head (m)', fontsize=12, fontweight='bold', labelpad=15)
     
-    # Add frequency information - Always at top left corner
-    if show_both_frequencies:
-        plt.text(0.02, 0.98, "50Hz / 60Hz", 
-                 transform=ax.transAxes, 
-                 fontsize=14,
-                 fontweight='bold',
-                 horizontalalignment='left',
-                 verticalalignment='top',
-                 bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.5'))
+    # Add frequency information at top left corner
+    if len(frequencies_to_plot) == 1:
+        # Single frequency
+        freq_text = frequencies_to_plot[0]
     else:
-        plt.text(0.02, 0.98, "50Hz", 
-                 transform=ax.transAxes, 
-                 fontsize=14,
-                 fontweight='bold',
-                 horizontalalignment='left',
-                 verticalalignment='top',
-                 bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.5'))
+        # Multiple frequencies
+        freq_text = " / ".join(frequencies_to_plot)
+        
+    plt.text(0.02, 0.98, freq_text, 
+             transform=ax.transAxes, 
+             fontsize=14,
+             fontweight='bold',
+             horizontalalignment='left',
+             verticalalignment='top',
+             bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.5'))
     
     # Add legend with model names and frequencies
     ax.legend(loc='upper right', fontsize=10, framealpha=0.7)
