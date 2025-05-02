@@ -46,6 +46,10 @@ def main():
     if 'chart_generated' not in st.session_state:
         st.session_state.chart_generated = False
     
+    # Initialize number of data points
+    if 'num_data_points' not in st.session_state:
+        st.session_state.num_data_points = 11
+    
     st.markdown("""
     This tool allows you to generate pump performance curves similar to manufacturer specifications.
     First, configure your chart settings, then upload or enter your pump data to generate the curve.
@@ -479,6 +483,18 @@ def handle_manual_input(frequency_option="Both"):
                                       key=f"model_name_{i}_{st.session_state.input_reset_key}")
             model_names.append(model_name)
         
+        # Number of data points - New control
+        num_points = st.number_input(
+            "Number of Data Points", 
+            min_value=3, 
+            max_value=30, 
+            value=st.session_state.num_data_points,
+            key=f"num_points_{st.session_state.input_reset_key}"
+        )
+        
+        # Store the number of data points in session state for persistence
+        st.session_state.num_data_points = num_points
+        
         # Frequencies to display (based on frequency_option)
         frequencies_to_show = []
         if frequency_option == "50Hz Only" or frequency_option == "Both":
@@ -492,18 +508,29 @@ def handle_manual_input(frequency_option="Both"):
         
         # Template data for different frequencies
         if use_template:
-            # Common head values for all models
-            num_points = 11
-            template_head = [4.8, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 49.8]
+            # Common head values for all models - Generate based on num_points
+            template_head = np.linspace(5.0, 50.0, num_points).tolist()
             
-            # Flow values for each model at 50Hz
-            template_flow_50hz = {
-                model_names[0]: [90.09, 89.96, 84.81, 77.43, 69.85, 61.89, 53.93, 41.81, 29.34, 18.52, 8.45],
-            }
+            # Flow values for each model at 50Hz - Generate curves based on num_points
+            template_flow_50hz = {}
             
-            # Flow values for each model at 60Hz
+            # Generate base model flow curve with appropriate number of points
+            base_flow_50hz = []
+            for i in range(num_points):
+                # Create a curve that gradually decreases from max to min flow
+                # as head increases (non-linear curve with steeper drop-off at end)
+                progress = i / (num_points - 1)  # 0 to 1
+                # Apply non-linear transformation for more realistic curve
+                flow_factor = 1 - (progress ** 1.5)  # Non-linear decrease
+                flow_value = 90.0 * flow_factor
+                base_flow_50hz.append(flow_value)
+            
+            # Set first model's flow
+            template_flow_50hz[model_names[0]] = base_flow_50hz
+            
+            # Flow values for each model at 60Hz (20% higher)
             template_flow_60hz = {
-                model_names[0]: [108.11, 107.95, 101.77, 92.92, 83.82, 74.27, 64.72, 50.17, 35.21, 22.22, 10.14],
+                model_names[0]: [flow * 1.2 for flow in base_flow_50hz],
             }
             
             # Generate values for other models
@@ -515,10 +542,6 @@ def handle_manual_input(frequency_option="Both"):
                     template_flow_50hz[model] = [flow * multiplier for flow in template_flow_50hz[model_names[0]]]
                     template_flow_60hz[model] = [flow * multiplier for flow in template_flow_60hz[model_names[0]]]
         else:
-            # Number of data points
-            num_points = st.number_input("Number of Data Points", min_value=3, max_value=20, value=8,
-                                      key=f"num_points_{st.session_state.input_reset_key}")
-            
             # Generate default head values (common for all models)
             template_head = np.linspace(5.0, 50.0, num_points).tolist()
             
@@ -619,6 +642,8 @@ def handle_manual_input(frequency_option="Both"):
             st.session_state.chart_generated = True
             return transformed_df
         elif refresh_data:
+            # Increment the reset key to force form refresh
+            st.session_state.input_reset_key += 1
             # Just return the current data to update the form
             return None
     
