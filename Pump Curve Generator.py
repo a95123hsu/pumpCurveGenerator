@@ -50,16 +50,6 @@ def main():
     if 'num_data_points' not in st.session_state:
         st.session_state.num_data_points = 11
     
-    # Initialize manual input form values
-    if 'form_values' not in st.session_state:
-        st.session_state.form_values = {
-            'flow_unit': "GPM",
-            'head_unit': "ft",
-            'num_models': 2,
-            'model_names': ["Model-A", "Model-B"],
-            'use_template': True
-        }
-    
     st.markdown("""
     This tool allows you to generate pump performance curves similar to manufacturer specifications.
     First, configure your chart settings, then upload or enter your pump data to generate the curve.
@@ -512,13 +502,6 @@ def handle_manual_input(frequency_option="Both"):
         if frequency_option == "60Hz Only" or frequency_option == "Both":
             frequencies_to_show.append("60Hz")
             
-        # Submit button and Refresh Form button for better UX positioning
-        submitted = None
-        refresh_data = None
-        
-        # Place the Refresh Form button before data editing
-        refresh_data = st.form_submit_button("Refresh Form", on_click=lambda: setattr(st.session_state, 'input_reset_key', st.session_state.input_reset_key + 1))
-        
         # Option to use template data
         use_template = st.checkbox("Use Template Data", value=True,
                                  key=f"use_template_{st.session_state.input_reset_key}")
@@ -618,8 +601,13 @@ def handle_manual_input(frequency_option="Both"):
                 # Store the edited data
                 edited_data[freq] = edited_df
         
-        # Only show Generate Pump Curve button (Refresh Form was moved to the top)
-        submitted = st.form_submit_button("Generate Pump Curve")
+        # Submit button and Refresh Form button
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button("Generate Pump Curve")
+        with col2:
+            # Keep the Refresh Form button
+            refresh_data = st.form_submit_button("Refresh Form")
         
         if submitted:
             # Transform the edited data back into the format needed for plotting
@@ -653,7 +641,11 @@ def handle_manual_input(frequency_option="Both"):
             # Automatically generate the chart when data is submitted
             st.session_state.chart_generated = True
             return transformed_df
-        # The refresh_data handler has been moved to the top of the form
+        elif refresh_data:
+            # Increment the reset key to force form refresh
+            st.session_state.input_reset_key += 1
+            # Just return the current data to update the form
+            return None
     
     return None
 
