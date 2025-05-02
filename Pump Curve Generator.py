@@ -502,6 +502,19 @@ def handle_manual_input(frequency_option="Both"):
         if frequency_option == "60Hz Only" or frequency_option == "Both":
             frequencies_to_show.append("60Hz")
             
+        # Submit button and Refresh Form button for better UX positioning
+        submitted = None
+        refresh_data = None
+        
+        # Place the Refresh Form button before data editing
+        refresh_data = st.form_submit_button("Refresh Form")
+        
+        if refresh_data:
+            # Increment the reset key to force form refresh
+            st.session_state.input_reset_key += 1
+            # Return None to update the form
+            return None
+        
         # Option to use template data
         use_template = st.checkbox("Use Template Data", value=True,
                                  key=f"use_template_{st.session_state.input_reset_key}")
@@ -601,13 +614,8 @@ def handle_manual_input(frequency_option="Both"):
                 # Store the edited data
                 edited_data[freq] = edited_df
         
-        # Submit button and Refresh Form button
-        col1, col2 = st.columns(2)
-        with col1:
-            submitted = st.form_submit_button("Generate Pump Curve")
-        with col2:
-            # Keep the Refresh Form button
-            refresh_data = st.form_submit_button("Refresh Form")
+        # Only show Generate Pump Curve button (Refresh Form was moved to the top)
+        submitted = st.form_submit_button("Generate Pump Curve")
         
         if submitted:
             # Transform the edited data back into the format needed for plotting
@@ -641,11 +649,7 @@ def handle_manual_input(frequency_option="Both"):
             # Automatically generate the chart when data is submitted
             st.session_state.chart_generated = True
             return transformed_df
-        elif refresh_data:
-            # Increment the reset key to force form refresh
-            st.session_state.input_reset_key += 1
-            # Just return the current data to update the form
-            return None
+        # The refresh_data handler has been moved to the top of the form
     
     return None
 
@@ -896,7 +900,7 @@ def generate_pump_curve(df, frequency_option="Both", chart_style="Modern", show_
     # Add legend with model names and frequencies
     ax.legend(loc='upper right', fontsize=10, framealpha=0.7)
     
-    plt.title('', fontsize=16, fontweight='bold', pad=20)
+    plt.title('Pump Performance Curves', fontsize=16, fontweight='bold', pad=20)
     plt.tight_layout()
     
     return fig
