@@ -50,6 +50,16 @@ def main():
     if 'num_data_points' not in st.session_state:
         st.session_state.num_data_points = 11
     
+    # Initialize manual input form values
+    if 'form_values' not in st.session_state:
+        st.session_state.form_values = {
+            'flow_unit': "GPM",
+            'head_unit': "ft",
+            'num_models': 2,
+            'model_names': ["Model-A", "Model-B"],
+            'use_template': True
+        }
+    
     st.markdown("""
     This tool allows you to generate pump performance curves similar to manufacturer specifications.
     First, configure your chart settings, then upload or enter your pump data to generate the curve.
