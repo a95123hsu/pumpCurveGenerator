@@ -565,14 +565,6 @@ def handle_manual_input(frequency_option="Both"):
         # Create editable dataframes for each frequency
         st.markdown("### Edit Pump Data Below")
         
-        # Add Refresh Form button immediately after the heading
-        refresh_data = st.form_submit_button("Refresh Form")
-        if refresh_data:
-            # Increment the reset key to force form refresh
-            st.session_state.input_reset_key += 1
-            # Return None to update the form
-            return None
-        
         # Create tabs for each frequency
         frequency_tabs = st.tabs([f"{freq} Data" for freq in frequencies_to_show])
         
@@ -609,8 +601,13 @@ def handle_manual_input(frequency_option="Both"):
                 # Store the edited data
                 edited_data[freq] = edited_df
         
-        # Only show Generate Pump Curve button
-        submitted = st.form_submit_button("Generate Pump Curve")
+        # Submit button and Refresh Form button
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button("Generate Pump Curve")
+        with col2:
+            # Keep the Refresh Form button
+            refresh_data = st.form_submit_button("Refresh Form")
         
         if submitted:
             # Transform the edited data back into the format needed for plotting
@@ -644,6 +641,11 @@ def handle_manual_input(frequency_option="Both"):
             # Automatically generate the chart when data is submitted
             st.session_state.chart_generated = True
             return transformed_df
+        elif refresh_data:
+            # Increment the reset key to force form refresh
+            st.session_state.input_reset_key += 1
+            # Just return the current data to update the form
+            return None
     
     return None
 
