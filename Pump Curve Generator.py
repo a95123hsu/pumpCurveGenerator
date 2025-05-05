@@ -729,7 +729,7 @@ def handle_manual_input(frequency_option="Both", language="English"):
             frequencies_to_show.append("60Hz")
             
         # Option to use template data
-        use_template = st.checkbox(use_template_text, value=True,
+        use_template = st.checkbox(use_template_text, value=False,
                                  key=f"use_template_{st.session_state.input_reset_key}")
         
         # Template data for different frequencies
