@@ -12,7 +12,7 @@ def main():
         if st.session_state.current_df is not None and st.session_state.chart_generated:
             st.rerun()
 
-    st.set_page_config(page_title="泵曲线生成器", layout="wide")
+    st.set_page_config(page_title="泵曲線生成器", layout="wide")
     
     # Initialize session state for language
     if 'language' not in st.session_state:
@@ -20,7 +20,7 @@ def main():
     
     # Create a language switcher in the sidebar
     language = st.sidebar.selectbox(
-        "选择语言 / Select Language",
+        "選擇語言 / Select Language",
         ["中文", "English"],
         index=0 if st.session_state.language == "Chinese" else 1
     )
@@ -30,28 +30,47 @@ def main():
     
     # Set language-specific UI text
     if st.session_state.language == "Chinese":
-        title_text = "泵曲线生成器工具"
+        title_text = "泵曲線生成器工具"
         intro_text = """
-        此工具允许您生成类似于制造商规格的泵性能曲线。
-        首先，配置您的图表设置，然后上传或输入您的泵数据以生成曲线。
+        此工具允許您生成類似於製造商規格的泵性能曲線。
+        首先，配置您的圖表設置，然後上傳或輸入您的泵數據以生成曲線。
         """
-        tab1_text = "创建泵曲线"
-        tab2_text = "关于泵曲线"
-        config_text = "图表配置"
-        freq_display_text = "频率显示"
-        chart_style_text = "图表样式"
-        show_system_text = "显示系统曲线"
-        show_grid_text = "显示网格"
-        static_head_text = "静压头 (m)"
+        tab1_text = "創建泵曲線"
+        tab2_text = "關於泵曲線"
+        config_text = "圖表配置"
+        freq_display_text = "頻率顯示"
+        chart_style_text = "圖表樣式"
+        show_system_text = "顯示系統曲線"
+        show_grid_text = "顯示網格"
+        static_head_text = "靜壓頭 (m)"
         k_factor_text = "摩擦因子 (k)"
-        axis_range_text = "坐标轴范围设置"
+        axis_range_text = "坐標軸範圍設置"
         min_flow_text = "最小流量"
-        max_flow_text = "最大流量 (0 为自动)"
-        min_head_text = "最小扬程"
-        max_head_text = "最大扬程 (0 为自动)"
-        input_method_text = "选择输入方式"
-        upload_csv_text = "上传 CSV"
-        manual_input_text = "手动输入"
+        max_flow_text = "最大流量 (0 為自動)"
+        min_head_text = "最小揚程"
+        max_head_text = "最大揚程 (0 為自動)"
+        input_method_text = "選擇輸入方式"
+        upload_csv_text = "上傳 CSV"
+        manual_input_text = "手動輸入"
+        excel_copy_text = "您可以從 Excel 複製數據並直接粘貼到這些表格中。在 Excel 中選擇單元格，複製 (Ctrl+C)，點擊下面表格中的起始單元格，然後粘貼 (Ctrl+V)。"
+        flow_unit_text = "流量單位"
+        head_unit_text = "揚程單位"
+        num_models_text = "泵型號數量"
+        model_name_text = "型號 {} 名稱"
+        num_points_text = "數據點數量"
+        use_template_text = "使用模板數據"
+        edit_pump_data_text = "### 編輯下方泵數據"
+        edit_data_info_text = "編輯 {} 泵數據。揚程值在所有型號中是共用的。"
+        generate_curve_text = "生成泵曲線"
+        refresh_form_text = "刷新表單"
+        csv_template_text = "### 下載 CSV 模板"
+        download_template_text = "下載 CSV 模板"
+        detected_head_text = "檢測到以揚程為首的數據格式。正在轉換為圖表所需的格式。"
+        no_flow_columns_text = "在 CSV 中未檢測到流量列。請確保列名包含'Flow'。"
+        download_label = "下載圖表 (PNG)"
+        chart_generate_error = "生成圖表時出錯: {}"
+        click_generate_chart = "點擊生成圖表按鈕創建泵曲線。"
+        csv_error = "讀取 CSV 文件時出錯: {}"
     else:
         title_text = "Pump Curve Generator Tool"
         intro_text = """
@@ -75,6 +94,25 @@ def main():
         input_method_text = "Select Input Method"
         upload_csv_text = "Upload CSV"
         manual_input_text = "Manual Input"
+        excel_copy_text = "You can copy data from Excel and paste directly into these tables. Select cells in Excel, copy (Ctrl+C), click on the starting cell in the table below, and paste (Ctrl+V)."
+        flow_unit_text = "Flow Rate Unit"
+        head_unit_text = "Head Unit"
+        num_models_text = "Number of Pump Models"
+        model_name_text = "Model {} Name"
+        num_points_text = "Number of Data Points"
+        use_template_text = "Use Template Data"
+        edit_pump_data_text = "### Edit Pump Data Below"
+        edit_data_info_text = "Edit {} pump data below. Head values are common across models."
+        generate_curve_text = "Generate Pump Curve"
+        refresh_form_text = "Refresh Form"
+        csv_template_text = "### Download Sample CSV Template"
+        download_template_text = "Download CSV Template"
+        detected_head_text = "Detected head-first format data. Converting to the format needed for the chart."
+        no_flow_columns_text = "No flow columns detected in the CSV. Please ensure column names contain 'Flow'."
+        download_label = "Download Plot (PNG)"
+        chart_generate_error = "Error generating chart: {}"
+        click_generate_chart = "Click Generate Chart to create the pump curve."
+        csv_error = "Error reading CSV file: {}"
     
     # Initialize session state for tracking changes and storing persistent data
     if 'refresh_counter' not in st.session_state:
@@ -124,13 +162,13 @@ def main():
         
         # Frequency options translations
         freq_options = {
-            "Chinese": ["仅 50Hz", "仅 60Hz", "两者都显示"],
+            "Chinese": ["僅 50Hz", "僅 60Hz", "兩者都顯示"],
             "English": ["50Hz Only", "60Hz Only", "Both"]
         }
         
         # Chart style options translations
         style_options = {
-            "Chinese": ["现代", "经典"],
+            "Chinese": ["現代", "經典"],
             "English": ["Modern", "Classic"]
         }
         
@@ -321,7 +359,7 @@ def main():
         
         # Sidebar for input method selection
         input_method_options = {
-            "Chinese": ["上传 CSV", "手动输入"],
+            "Chinese": ["上傳 CSV", "手動輸入"],
             "English": ["Upload CSV", "Manual Input"]
         }
         
@@ -372,65 +410,65 @@ def main():
                     download_button_for_plot(fig, st.session_state.language)
                 except Exception as e:
                     if st.session_state.language == "Chinese":
-                        st.error(f"生成图表时出错: {e}")
+                        st.error(chart_generate_error.format(e))
                     else:
-                        st.error(f"Error generating chart: {e}")
+                        st.error(chart_generate_error.format(e))
             else:
                 if st.session_state.language == "Chinese":
-                    st.info("点击生成图表按钮创建泵曲线。")
+                    st.info(click_generate_chart)
                 else:
-                    st.info("Click Generate Chart to create the pump curve.")
+                    st.info(click_generate_chart)
     
     with tab2:
         if st.session_state.language == "Chinese":
-            st.subheader("了解泵曲线")
+            st.subheader("了解泵曲線")
             st.markdown("""
-            ### 什么是泵曲线？
+            ### 什麼是泵曲線？
             
-            泵曲线（或性能曲线）以图形方式表示以下关系：
+            泵曲線（或性能曲線）以圖形方式表示以下關係：
             
-            - **流量**：泵每单位时间可以输送的液体体积（以 LPM、m³/h 或 GPM 计量）
-            - **扬程**：泵可以提升液体的压力或高度（以米或英尺计量）
+            - **流量**：泵每單位時間可以輸送的液體體積（以 LPM、m³/h 或 GPM 計量）
+            - **揚程**：泵可以提升液體的壓力或高度（以米或英尺計量）
             
-            ### 读取泵曲线
+            ### 讀取泵曲線
             
-            - 每条曲线代表特定的泵型号或叶轮尺寸
-            - X轴显示流量
-            - Y轴显示扬程
-            - 随着流量增加，扬程通常会减少
-            - 泵的工作点由泵曲线与系统曲线的交点确定
+            - 每條曲線代表特定的泵型號或葉輪尺寸
+            - X軸顯示流量
+            - Y軸顯示揚程
+            - 隨著流量增加，揚程通常會減少
+            - 泵的工作點由泵曲線與系統曲線的交點確定
             
-            ### 系统曲线
+            ### 系統曲線
             
-            系统曲线表示管道系统中的阻力：
+            系統曲線表示管道系統中的阻力：
             
-            - 它由静压头（垂直高度）和摩擦损失组成
-            - 数学表达式为：H = Hs + k × Q²
-              - H = 总扬程
-              - Hs = 静压头
-              - k = 摩擦系数
+            - 它由靜壓頭（垂直高度）和摩擦損失組成
+            - 數學表達式為：H = Hs + k × Q²
+              - H = 總揚程
+              - Hs = 靜壓頭
+              - k = 摩擦係數
               - Q = 流量
             
-            ### 频率影响（50Hz 与 60Hz）
+            ### 頻率影響（50Hz 與 60Hz）
             
-            改变电频影响泵的性能：
+            改變電頻影響泵的性能：
             
-            - 流量 (Q) 与转速 (n) 成正比：Q₂ = Q₁ × (n₂/n₁)
-            - 扬程 (H) 与转速的平方成正比：H₂ = H₁ × (n₂/n₁)²
-            - 功率 (P) 与转速的立方成正比：P₂ = P₁ × (n₂/n₁)³
+            - 流量 (Q) 與轉速 (n) 成正比：Q₂ = Q₁ × (n₂/n₁)
+            - 揚程 (H) 與轉速的平方成正比：H₂ = H₁ × (n₂/n₁)²
+            - 功率 (P) 與轉速的立方成正比：P₂ = P₁ × (n₂/n₁)³
             
-            50Hz 到 60Hz 的转换：
+            50Hz 到 60Hz 的轉換：
             - 流量增加 20%（60/50 = 1.2）
-            - 扬程增加 44%（1.2² = 1.44）
+            - 揚程增加 44%（1.2² = 1.44）
             - 功率增加 73%（1.2³ = 1.728）
             
-            ### 选择合适的泵
+            ### 選擇合適的泵
             
-            选择泵时，考虑以下因素：
+            選擇泵時，考慮以下因素：
             1. 所需流量
-            2. 所需扬程
-            3. 系统效率
-            4. NPSH（净正吸入扬程）
+            2. 所需揚程
+            3. 系統效率
+            4. NPSH（淨正吸入揚程）
             5. 功耗
             """)
         else:
@@ -487,12 +525,12 @@ def main():
 
 def handle_csv_upload(language):
     if language == "Chinese":
-        st.subheader("上传 CSV 文件")
-        uploaded_file = st.file_uploader("选择 CSV 文件", type="csv")
-        csv_template_text = "### 下载 CSV 模板"
-        download_template_text = "下载 CSV 模板"
-        detected_head_text = "检测到以扬程为首的数据格式。正在转换为图表所需的格式。"
-        no_flow_columns_text = "在 CSV 中未检测到流量列。请确保列名包含'Flow'。"
+        st.subheader("上傳 CSV 文件")
+        uploaded_file = st.file_uploader("選擇 CSV 文件", type="csv")
+        csv_template_text = "### 下載 CSV 模板"
+        download_template_text = "下載 CSV 模板"
+        detected_head_text = "檢測到以揚程為首的數據格式。正在轉換為圖表所需的格式。"
+        no_flow_columns_text = "在 CSV 中未檢測到流量列。請確保列名包含'Flow'。"
     else:
         st.subheader("Upload CSV File")
         uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
@@ -606,7 +644,7 @@ def handle_csv_upload(language):
             return df
         except Exception as e:
             if language == "Chinese":
-                st.error(f"读取 CSV 文件时出错: {e}")
+                st.error(f"讀取 CSV 文件時出錯: {e}")
             else:
                 st.error(f"Error reading CSV file: {e}")
             return None
@@ -615,18 +653,18 @@ def handle_csv_upload(language):
 
 def handle_manual_input(frequency_option="Both", language="English"):
     if language == "Chinese":
-        st.subheader("手动数据输入")
-        excel_copy_text = "您可以从 Excel 复制数据并直接粘贴到这些表格中。在 Excel 中选择单元格，复制 (Ctrl+C)，点击下面表格中的起始单元格，然后粘贴 (Ctrl+V)。"
-        flow_unit_text = "流量单位"
-        head_unit_text = "扬程单位"
-        num_models_text = "泵型号数量"
-        model_name_text = "型号 {} 名称"
-        num_points_text = "数据点数量"
-        use_template_text = "使用模板数据"
-        edit_pump_data_text = "### 编辑下方泵数据"
-        edit_data_info_text = "编辑 {} 泵数据。扬程值在所有型号中是共用的。"
-        generate_curve_text = "生成泵曲线"
-        refresh_form_text = "刷新表单"
+        st.subheader("手動數據輸入")
+        excel_copy_text = "您可以從 Excel 複製數據並直接粘貼到這些表格中。在 Excel 中選擇單元格，複製 (Ctrl+C)，點擊下面表格中的起始單元格，然後粘貼 (Ctrl+V)。"
+        flow_unit_text = "流量單位"
+        head_unit_text = "揚程單位"
+        num_models_text = "泵型號數量"
+        model_name_text = "型號 {} 名稱"
+        num_points_text = "數據點數量"
+        use_template_text = "使用模板數據"
+        edit_pump_data_text = "### 編輯下方泵數據"
+        edit_data_info_text = "編輯 {} 泵數據。揚程值在所有型號中是共用的。"
+        generate_curve_text = "生成泵曲線"
+        refresh_form_text = "刷新表單"
     else:
         st.subheader("Manual Data Input")
         excel_copy_text = "You can copy data from Excel and paste directly into these tables. Select cells in Excel, copy (Ctrl+C), click on the starting cell in the table below, and paste (Ctrl+V)."
@@ -1097,7 +1135,7 @@ def download_button_for_plot(fig, language):
     
     # Create download button with language-specific label
     if language == "Chinese":
-        download_label = "下载图表 (PNG)"
+        download_label = "下載圖表 (PNG)"
     else:
         download_label = "Download Plot (PNG)"
         
