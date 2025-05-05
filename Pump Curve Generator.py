@@ -12,109 +12,9 @@ def main():
         if st.session_state.current_df is not None and st.session_state.chart_generated:
             st.rerun()
 
-    st.set_page_config(page_title="泵曲線生成器", layout="wide")
+    st.set_page_config(page_title="Pump Curve Generator", layout="wide")
     
-    # Initialize session state for language
-    if 'language' not in st.session_state:
-        st.session_state.language = "Chinese"  # Default language
-    
-    # Create a language switcher in the sidebar
-    language = st.sidebar.selectbox(
-        "選擇語言 / Select Language",
-        ["中文", "English"],
-        index=0 if st.session_state.language == "Chinese" else 1
-    )
-    
-    # Update language in session state
-    st.session_state.language = "Chinese" if language == "中文" else "English"
-    
-    # Set language-specific UI text
-    if st.session_state.language == "Chinese":
-        title_text = "泵曲線生成器工具"
-        intro_text = """
-        此工具允許您生成類似於製造商規格的泵性能曲線。
-        首先，配置您的圖表設置，然後上傳或輸入您的泵數據以生成曲線。
-        """
-        tab1_text = "創建泵曲線"
-        tab2_text = "關於泵曲線"
-        config_text = "圖表配置"
-        freq_display_text = "頻率顯示"
-        chart_style_text = "圖表樣式"
-        show_system_text = "顯示系統曲線"
-        show_grid_text = "顯示網格"
-        static_head_text = "靜壓頭 (m)"
-        k_factor_text = "摩擦因子 (k)"
-        axis_range_text = "坐標軸範圍設置"
-        min_flow_text = "最小流量"
-        max_flow_text = "最大流量 (0 為自動)"
-        min_head_text = "最小揚程"
-        max_head_text = "最大揚程 (0 為自動)"
-        input_method_text = "選擇輸入方式"
-        upload_csv_text = "上傳 CSV"
-        manual_input_text = "手動輸入"
-        excel_copy_text = "您可以從 Excel 複製數據並直接粘貼到這些表格中。在 Excel 中選擇單元格，複製 (Ctrl+C)，點擊下面表格中的起始單元格，然後粘貼 (Ctrl+V)。"
-        flow_unit_text = "流量單位"
-        head_unit_text = "揚程單位"
-        num_models_text = "泵型號數量"
-        model_name_text = "型號 {} 名稱"
-        num_points_text = "數據點數量"
-        use_template_text = "使用模板數據"
-        edit_pump_data_text = "### 編輯下方泵數據"
-        edit_data_info_text = "編輯 {} 泵數據。揚程值在所有型號中是共用的。"
-        generate_curve_text = "生成泵曲線"
-        refresh_form_text = "刷新表單"
-        csv_template_text = "### 下載 CSV 模板"
-        download_template_text = "下載 CSV 模板"
-        detected_head_text = "檢測到以揚程為首的數據格式。正在轉換為圖表所需的格式。"
-        no_flow_columns_text = "在 CSV 中未檢測到流量列。請確保列名包含'Flow'。"
-        download_label = "下載圖表 (PNG)"
-        chart_generate_error = "生成圖表時出錯: {}"
-        click_generate_chart = "點擊生成泵曲線按鈕創建圖表。"
-        csv_error = "讀取 CSV 文件時出錯: {}"
-        form_refreshed = "表單已刷新，數據已保存"
-    else:
-        title_text = "Pump Curve Generator Tool"
-        intro_text = """
-        This tool allows you to generate pump performance curves similar to manufacturer specifications.
-        First, configure your chart settings, then upload or enter your pump data to generate the curve.
-        """
-        tab1_text = "Create Pump Curves"
-        tab2_text = "About Pump Curves"
-        config_text = "Chart Configuration"
-        freq_display_text = "Frequency Display"
-        chart_style_text = "Chart Style"
-        show_system_text = "Show System Curve"
-        show_grid_text = "Show Grid"
-        static_head_text = "Static Head (m)"
-        k_factor_text = "Friction Factor (k)"
-        axis_range_text = "Axis Range Settings"
-        min_flow_text = "Min Flow"
-        max_flow_text = "Max Flow (0 for auto)"
-        min_head_text = "Min Head"
-        max_head_text = "Max Head (0 for auto)"
-        input_method_text = "Select Input Method"
-        upload_csv_text = "Upload CSV"
-        manual_input_text = "Manual Input"
-        excel_copy_text = "You can copy data from Excel and paste directly into these tables. Select cells in Excel, copy (Ctrl+C), click on the starting cell in the table below, and paste (Ctrl+V)."
-        flow_unit_text = "Flow Rate Unit"
-        head_unit_text = "Head Unit"
-        num_models_text = "Number of Pump Models"
-        model_name_text = "Model {} Name"
-        num_points_text = "Number of Data Points"
-        use_template_text = "Use Template Data"
-        edit_pump_data_text = "### Edit Pump Data Below"
-        edit_data_info_text = "Edit {} pump data below. Head values are common across models."
-        generate_curve_text = "Generate Pump Curve"
-        refresh_form_text = "Refresh Form"
-        csv_template_text = "### Download Sample CSV Template"
-        download_template_text = "Download CSV Template"
-        detected_head_text = "Detected head-first format data. Converting to the format needed for the chart."
-        no_flow_columns_text = "No flow columns detected in the CSV. Please ensure column names contain 'Flow'."
-        download_label = "Download Plot (PNG)"
-        chart_generate_error = "Error generating chart: {}"
-        click_generate_chart = "Click Generate Pump Curve to create the chart."
-        csv_error = "Error reading CSV file: {}"
-        form_refreshed = "Form refreshed, data preserved"
+    st.title("Pump Curve Generator Tool")
     
     # Initialize session state for tracking changes and storing persistent data
     if 'refresh_counter' not in st.session_state:
@@ -149,83 +49,47 @@ def main():
     # Initialize number of data points
     if 'num_data_points' not in st.session_state:
         st.session_state.num_data_points = 11
-        
-    # Initialize manual input data storage
-    if 'manual_input_data' not in st.session_state:
-        st.session_state.manual_input_data = {
-            'flow_unit': "GPM",
-            'head_unit': "ft",
-            'model_names': ["Model-A", "Model-B"],
-            'use_template': True,
-            'edited_data': {}
-        }
     
-    # Initialize form refresh notification
-    if 'show_refresh_notification' not in st.session_state:
-        st.session_state.show_refresh_notification = False
+    st.markdown("""
+    This tool allows you to generate pump performance curves similar to manufacturer specifications.
+    First, configure your chart settings, then upload or enter your pump data to generate the curve.
+    """)
     
-    st.title(title_text)
-    st.markdown(intro_text)
-    
-    tab1, tab2 = st.tabs([tab1_text, tab2_text])
+    tab1, tab2 = st.tabs(["Create Pump Curves", "About Pump Curves"])
     
     with tab1:
         # Configuration options
-        st.subheader(config_text)
+        st.subheader("Chart Configuration")
         
         # Create columns for chart options
         col_a, col_b, col_c, col_d = st.columns([1, 1, 1, 1])
         
-        # Frequency options translations
-        freq_options = {
-            "Chinese": ["僅 50Hz", "僅 60Hz", "兩者都顯示"],
-            "English": ["50Hz Only", "60Hz Only", "Both"]
-        }
-        
-        # Chart style options translations
-        style_options = {
-            "Chinese": ["現代", "經典"],
-            "English": ["Modern", "Classic"]
-        }
-        
         # When any option changes, immediately update session state and trigger chart refresh
         with col_a:
-            frequency_option_display = freq_options[st.session_state.language]
-            frequency_option_values = ["50Hz Only", "60Hz Only", "Both"]
-            
-            # Find index of current value in the values list
-            current_index = frequency_option_values.index(st.session_state.chart_params.get('frequency_option', "Both"))
-            
             frequency_option = st.selectbox(
-                freq_display_text, 
-                frequency_option_display,
-                index=current_index,
+                "Frequency Display", 
+                ["50Hz Only", "60Hz Only", "Both"],
+                index=["50Hz Only", "60Hz Only", "Both"].index(st.session_state.chart_params.get('frequency_option', "Both")),
                 key="frequency_option_select",
                 on_change=lambda: (
                     setattr(
                         st.session_state, 'chart_params', 
-                        {**st.session_state.chart_params, 'frequency_option': frequency_option_values[frequency_option_display.index(st.session_state.frequency_option_select)]}
+                        {**st.session_state.chart_params, 'frequency_option': st.session_state.frequency_option_select}
                     ),
                     update_chart_on_config_change()
                 )
             )
         
         with col_b:
-            style_option_display = style_options[st.session_state.language]
-            style_option_values = ["Modern", "Classic"]
-            
-            # Find index of current value in the values list
-            current_style_index = style_option_values.index(st.session_state.chart_params['chart_style'])
-            
             chart_style = st.selectbox(
-                chart_style_text, 
-                style_option_display, 
-                index=current_style_index,
+                "Chart Style", 
+                ["Modern", "Classic"], 
+                index=["Modern", "Classic"].index(st.session_state.chart_params['chart_style']),
                 key="chart_style_select",
                 on_change=lambda: (
                     setattr(
                         st.session_state, 'chart_params', 
-                        {**st.session_state.chart_params, 'chart_style': style_option_values[style_option_display.index(st.session_state.chart_style_select)]}
+                        {**st.session_state.chart_params, 'chart_style': st.session_state.chart_style_select}
                     ),
                     update_chart_on_config_change()
                 )
@@ -233,7 +97,7 @@ def main():
         
         with col_c:
             show_system = st.checkbox(
-                show_system_text, 
+                "Show System Curve", 
                 value=st.session_state.chart_params['show_system_curve'],
                 key="system_curve_checkbox",
                 on_change=lambda: (
@@ -247,7 +111,7 @@ def main():
         
         with col_d:
             show_grid = st.checkbox(
-                show_grid_text, 
+                "Show Grid", 
                 value=st.session_state.chart_params['show_grid'],
                 key="show_grid_checkbox",
                 on_change=lambda: (
@@ -264,7 +128,7 @@ def main():
             col_e, col_f = st.columns(2)
             with col_e:
                 static_head = st.number_input(
-                    static_head_text, 
+                    "Static Head (m)", 
                     min_value=0.0, 
                     value=st.session_state.chart_params['static_head'], 
                     step=0.5,
@@ -280,7 +144,7 @@ def main():
             
             with col_f:
                 k_factor = st.number_input(
-                    k_factor_text, 
+                    "Friction Factor (k)", 
                     min_value=0.00001, 
                     value=st.session_state.chart_params['k_factor'], 
                     format="%.6f", 
@@ -296,12 +160,12 @@ def main():
                 )
         
         # Add axis range controls
-        st.subheader(axis_range_text)
+        st.subheader("Axis Range Settings")
         col_g, col_h, col_i, col_j = st.columns(4)
         
         with col_g:
             min_flow = st.number_input(
-                min_flow_text, 
+                "Min Flow", 
                 min_value=0.0,
                 value=float(st.session_state.chart_params['min_flow'] or 0.0), 
                 step=10.0,
@@ -321,7 +185,7 @@ def main():
             max_flow_value = float(max_flow_value) if max_flow_value is not None else None
             
             max_flow = st.number_input(
-                max_flow_text, 
+                "Max Flow (0 for auto)", 
                 min_value=0.0,
                 value=float(max_flow_value or 0.0), 
                 step=100.0,
@@ -337,7 +201,7 @@ def main():
             
         with col_i:
             min_head = st.number_input(
-                min_head_text, 
+                "Min Head", 
                 min_value=0.0,
                 value=float(st.session_state.chart_params['min_head'] or 0.0), 
                 step=1.0,
@@ -357,7 +221,7 @@ def main():
             max_head_value = float(max_head_value) if max_head_value is not None else None
             
             max_head = st.number_input(
-                max_head_text, 
+                "Max Head (0 for auto)", 
                 min_value=0.0,
                 value=float(max_head_value or 0.0), 
                 step=1.0,
@@ -373,38 +237,23 @@ def main():
         
         st.markdown("---")
         
-        # Show refresh notification if needed
-        if st.session_state.show_refresh_notification:
-            st.success(form_refreshed)
-            st.session_state.show_refresh_notification = False
-        
         # Sidebar for input method selection
-        input_method_options = {
-            "Chinese": ["上傳 CSV", "手動輸入"],
-            "English": ["Upload CSV", "Manual Input"]
-        }
-        
-        input_method_values = ["Upload CSV", "Manual Input"]
-        input_method_display = input_method_options[st.session_state.language]
-        
         input_method = st.radio(
-            input_method_text,
-            input_method_display
+            "Select Input Method",
+            ["Upload CSV", "Manual Input"]
         )
         
-        selected_method = input_method_values[input_method_display.index(input_method)]
-        
-        if selected_method == "Upload CSV":
-            df = handle_csv_upload(st.session_state.language)
+        if input_method == "Upload CSV":
+            df = handle_csv_upload()
         else:
-            df = handle_manual_input(st.session_state.chart_params.get('frequency_option', "Both"), st.session_state.language)
+            df = handle_manual_input(st.session_state.chart_params.get('frequency_option', "Both"))
         
         # Generate and display the pump curve if data is available
         if df is not None and not df.empty:
             st.session_state.current_df = df  # Store the current dataframe
             
             # For CSV uploads, automatically set chart_generated to True
-            if selected_method == "Upload CSV" and not st.session_state.chart_generated:
+            if input_method == "Upload CSV" and not st.session_state.chart_generated:
                 st.session_state.chart_generated = True
             
             # Generate curve using parameters from session state
@@ -428,137 +277,69 @@ def main():
                     st.pyplot(fig)
                     
                     # Add download button for the plot
-                    download_button_for_plot(fig, st.session_state.language)
+                    download_button_for_plot(fig)
                 except Exception as e:
-                    if st.session_state.language == "Chinese":
-                        st.error(chart_generate_error.format(e))
-                    else:
-                        st.error(chart_generate_error.format(e))
+                    st.error(f"Error generating chart: {e}")
             else:
-                if st.session_state.language == "Chinese":
-                    st.info(click_generate_chart)
-                else:
-                    st.info(click_generate_chart)
+                st.info("Click Generate Chart to create the pump curve.")
     
     with tab2:
-        if st.session_state.language == "Chinese":
-            st.subheader("了解泵曲線")
-            st.markdown("""
-            ### 什麼是泵曲線？
-            
-            泵曲線（或性能曲線）以圖形方式表示以下關係：
-            
-            - **流量**：泵每單位時間可以輸送的液體體積（以 LPM、m³/h 或 GPM 計量）
-            - **揚程**：泵可以提升液體的壓力或高度（以米或英尺計量）
-            
-            ### 讀取泵曲線
-            
-            - 每條曲線代表特定的泵型號或葉輪尺寸
-            - X軸顯示流量
-            - Y軸顯示揚程
-            - 隨著流量增加，揚程通常會減少
-            - 泵的工作點由泵曲線與系統曲線的交點確定
-            
-            ### 系統曲線
-            
-            系統曲線表示管道系統中的阻力：
-            
-            - 它由靜壓頭（垂直高度）和摩擦損失組成
-            - 數學表達式為：H = Hs + k × Q²
-              - H = 總揚程
-              - Hs = 靜壓頭
-              - k = 摩擦係數
-              - Q = 流量
-            
-            ### 頻率影響（50Hz 與 60Hz）
-            
-            改變電頻影響泵的性能：
-            
-            - 流量 (Q) 與轉速 (n) 成正比：Q₂ = Q₁ × (n₂/n₁)
-            - 揚程 (H) 與轉速的平方成正比：H₂ = H₁ × (n₂/n₁)²
-            - 功率 (P) 與轉速的立方成正比：P₂ = P₁ × (n₂/n₁)³
-            
-            50Hz 到 60Hz 的轉換：
-            - 流量增加 20%（60/50 = 1.2）
-            - 揚程增加 44%（1.2² = 1.44）
-            - 功率增加 73%（1.2³ = 1.728）
-            
-            ### 選擇合適的泵
-            
-            選擇泵時，考慮以下因素：
-            1. 所需流量
-            2. 所需揚程
-            3. 系統效率
-            4. NPSH（淨正吸入揚程）
-            5. 功耗
-            """)
-        else:
-            st.subheader("Understanding Pump Curves")
-            st.markdown("""
-            ### What is a Pump Curve?
-            
-            A pump curve (or performance curve) graphically represents the relationship between:
-            
-            - **Flow Rate**: The volume of liquid a pump can move per unit time (measured in LPM, m³/h, or GPM)
-            - **Head**: The pressure or height to which a pump can raise liquid (measured in meters or feet)
-            
-            ### Reading Pump Curves
-            
-            - Each curve represents a specific pump model or impeller size
-            - The x-axis shows flow rate
-            - The y-axis shows head
-            - As flow increases, head typically decreases
-            - The operating point of a pump is determined by where the pump curve intersects with the system curve
-            
-            ### System Curve
-            
-            A system curve represents the resistance in your piping system:
-            
-            - It consists of static head (vertical height) and friction losses
-            - Mathematically expressed as: H = Hs + k × Q²
-              - H = Total head
-              - Hs = Static head
-              - k = Friction coefficient
-              - Q = Flow rate
-            
-            ### Frequency Impact (50Hz vs 60Hz)
-            
-            Changing the electrical frequency affects pump performance:
-            
-            - Flow (Q) is proportional to speed (n): Q₂ = Q₁ × (n₂/n₁)
-            - Head (H) is proportional to speed squared: H₂ = H₁ × (n₂/n₁)²
-            - Power (P) is proportional to speed cubed: P₂ = P₁ × (n₂/n₁)³
-            
-            For 50Hz to 60Hz conversion:
-            - Flow increases by 20% (60/50 = 1.2)
-            - Head increases by 44% (1.2² = 1.44)
-            - Power increases by 73% (1.2³ = 1.728)
-            
-            ### Selecting the Right Pump
-            
-            When selecting a pump, consider:
-            1. Required flow rate
-            2. Required head
-            3. System efficiency
-            4. NPSH (Net Positive Suction Head)
-            5. Power consumption
-            """)
+        st.subheader("Understanding Pump Curves")
+        st.markdown("""
+        ### What is a Pump Curve?
+        
+        A pump curve (or performance curve) graphically represents the relationship between:
+        
+        - **Flow Rate**: The volume of liquid a pump can move per unit time (measured in LPM, m³/h, or GPM)
+        - **Head**: The pressure or height to which a pump can raise liquid (measured in meters or feet)
+        
+        ### Reading Pump Curves
+        
+        - Each curve represents a specific pump model or impeller size
+        - The x-axis shows flow rate
+        - The y-axis shows head
+        - As flow increases, head typically decreases
+        - The operating point of a pump is determined by where the pump curve intersects with the system curve
+        
+        ### System Curve
+        
+        A system curve represents the resistance in your piping system:
+        
+        - It consists of static head (vertical height) and friction losses
+        - Mathematically expressed as: H = Hs + k × Q²
+          - H = Total head
+          - Hs = Static head
+          - k = Friction coefficient
+          - Q = Flow rate
+        
+        ### Frequency Impact (50Hz vs 60Hz)
+        
+        Changing the electrical frequency affects pump performance:
+        
+        - Flow (Q) is proportional to speed (n): Q₂ = Q₁ × (n₂/n₁)
+        - Head (H) is proportional to speed squared: H₂ = H₁ × (n₂/n₁)²
+        - Power (P) is proportional to speed cubed: P₂ = P₁ × (n₂/n₁)³
+        
+        For 50Hz to 60Hz conversion:
+        - Flow increases by 20% (60/50 = 1.2)
+        - Head increases by 44% (1.2² = 1.44)
+        - Power increases by 73% (1.2³ = 1.728)
+        
+        ### Selecting the Right Pump
+        
+        When selecting a pump, consider:
+        1. Required flow rate
+        2. Required head
+        3. System efficiency
+        4. NPSH (Net Positive Suction Head)
+        5. Power consumption
+        """)
 
-def handle_csv_upload(language):
-    if language == "Chinese":
-        st.subheader("上傳 CSV 文件")
-        uploaded_file = st.file_uploader("選擇 CSV 文件", type="csv")
-        csv_template_text = "### 下載 CSV 模板"
-        download_template_text = "下載 CSV 模板"
-        detected_head_text = "檢測到以揚程為首的數據格式。正在轉換為圖表所需的格式。"
-        no_flow_columns_text = "在 CSV 中未檢測到流量列。請確保列名包含'Flow'。"
-    else:
-        st.subheader("Upload CSV File")
-        uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
-        csv_template_text = "### Download Sample CSV Template"
-        download_template_text = "Download CSV Template"
-        detected_head_text = "Detected head-first format data. Converting to the format needed for the chart."
-        no_flow_columns_text = "No flow columns detected in the CSV. Please ensure column names contain 'Flow'."
+def handle_csv_upload():
+    st.subheader("Upload CSV File")
+    
+    # File uploader
+    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
     
     # Sample CSV template for download - Updated to include both 50Hz and 60Hz data
     sample_data = pd.DataFrame({
@@ -569,12 +350,12 @@ def handle_csv_upload(language):
         'Model-B 60Hz Flow (GPM)': [126.60, 125.70, 114.26, 103.61, 94.12, 83.34, 72.91, 58.14, 42.25, 26.32, 13.49]
     })
     
-    st.markdown(csv_template_text)
+    st.markdown("### Download Sample CSV Template")
     
     # Create template with both frequencies
     csv_standard = sample_data.to_csv(index=False)
     b64_standard = base64.b64encode(csv_standard.encode()).decode()
-    href_standard = f'<a href="data:file/csv;base64,{b64_standard}" download="pump_curve_template.csv">{download_template_text}</a>'
+    href_standard = f'<a href="data:file/csv;base64,{b64_standard}" download="pump_curve_template.csv">Download CSV Template</a>'
     
     st.markdown(href_standard, unsafe_allow_html=True)
     
@@ -584,7 +365,7 @@ def handle_csv_upload(language):
             
             # Transform the data into format needed for plotting (Head vs Flow)
             if 'Head' in df.columns[0]:
-                st.info(detected_head_text)
+                st.info("Detected head-first format data. Converting to the format needed for the chart.")
                 
                 # Extract head values and units
                 head_col = df.columns[0]
@@ -598,7 +379,7 @@ def handle_csv_upload(language):
                 flow_cols = [col for col in df.columns if 'Flow' in col]
                 
                 if not flow_cols:
-                    st.warning(no_flow_columns_text)
+                    st.warning("No flow columns detected in the CSV. Please ensure column names contain 'Flow'.")
                     return None
                 
                 # Process columns by model and frequency
@@ -656,7 +437,7 @@ def handle_csv_upload(language):
             
             # Basic validation
             if not any('Flow' in col for col in df.columns):
-                st.warning(no_flow_columns_text)
+                st.warning("No Flow column detected. Please ensure your CSV has at least one Flow column.")
                 return None
             
             # Automatically set chart_generated to True when a file is uploaded
@@ -664,44 +445,16 @@ def handle_csv_upload(language):
                 
             return df
         except Exception as e:
-            if language == "Chinese":
-                st.error(f"讀取 CSV 文件時出錯: {e}")
-            else:
-                st.error(f"Error reading CSV file: {e}")
+            st.error(f"Error reading CSV file: {e}")
             return None
     
     return None
 
-def handle_manual_input(frequency_option="Both", language="English"):
-    if language == "Chinese":
-        st.subheader("手動數據輸入")
-        excel_copy_text = "您可以從 Excel 複製數據並直接粘貼到這些表格中。在 Excel 中選擇單元格，複製 (Ctrl+C)，點擊下面表格中的起始單元格，然後粘貼 (Ctrl+V)。"
-        flow_unit_text = "流量單位"
-        head_unit_text = "揚程單位"
-        num_models_text = "泵型號數量"
-        model_name_text = "型號 {} 名稱"
-        num_points_text = "數據點數量"
-        use_template_text = "使用模板數據"
-        edit_pump_data_text = "### 編輯下方泵數據"
-        edit_data_info_text = "編輯 {} 泵數據。揚程值在所有型號中是共用的。"
-        generate_curve_text = "生成泵曲線"
-        refresh_form_text = "刷新表單"
-    else:
-        st.subheader("Manual Data Input")
-        excel_copy_text = "You can copy data from Excel and paste directly into these tables. Select cells in Excel, copy (Ctrl+C), click on the starting cell in the table below, and paste (Ctrl+V)."
-        flow_unit_text = "Flow Rate Unit"
-        head_unit_text = "Head Unit"
-        num_models_text = "Number of Pump Models"
-        model_name_text = "Model {} Name"
-        num_points_text = "Number of Data Points"
-        use_template_text = "Use Template Data"
-        edit_pump_data_text = "### Edit Pump Data Below"
-        edit_data_info_text = "Edit {} pump data below. Head values are common across models."
-        generate_curve_text = "Generate Pump Curve"
-        refresh_form_text = "Refresh Form"
+def handle_manual_input(frequency_option="Both"):
+    st.subheader("Manual Data Input")
     
     # Add instructions for copying from Excel
-    st.info(excel_copy_text)
+    st.info("You can copy data from Excel and paste directly into these tables. Select cells in Excel, copy (Ctrl+C), click on the starting cell in the table below, and paste (Ctrl+V).")
     
     # Initialize session state for manually input data if it doesn't exist
     if 'input_reset_key' not in st.session_state:
@@ -712,37 +465,27 @@ def handle_manual_input(frequency_option="Both", language="English"):
         # Units selection
         col1, col2 = st.columns(2)
         with col1:
-            # Use session state values if available
-            default_flow_unit = st.session_state.manual_input_data.get('flow_unit', "GPM")
-            flow_unit = st.selectbox(flow_unit_text, ["GPM", "LPM", "m³/h"], 
-                                   index=["GPM", "LPM", "m³/h"].index(default_flow_unit),
+            flow_unit = st.selectbox("Flow Rate Unit", ["GPM", "LPM", "m³/h"], 
                                    key=f"flow_unit_{st.session_state.input_reset_key}")
         with col2:
-            default_head_unit = st.session_state.manual_input_data.get('head_unit', "ft")
-            head_unit = st.selectbox(head_unit_text, ["ft", "m"], 
-                                   index=["ft", "m"].index(default_head_unit),
+            head_unit = st.selectbox("Head Unit", ["ft", "m"], 
                                    key=f"head_unit_{st.session_state.input_reset_key}")
         
-        # Number of pump models (use previous value from session state if available)
-        default_num_models = len(st.session_state.manual_input_data.get('model_names', ["Model-A", "Model-B"]))
-        num_models = st.number_input(num_models_text, min_value=1, max_value=5, value=default_num_models,
+        # Number of pump models
+        num_models = st.number_input("Number of Pump Models", min_value=1, max_value=5, value=2,
                                    key=f"num_models_{st.session_state.input_reset_key}")
         
         # Model names
         model_names = []
-        stored_model_names = st.session_state.manual_input_data.get('model_names', ["Model-A", "Model-B"])
-        
         cols = st.columns(min(num_models, 5))
         for i, col in enumerate(cols):
-            # Use stored model name if available, otherwise use default
-            default_name = stored_model_names[i] if i < len(stored_model_names) else f"Model-{chr(65+i)}"
-            model_name = col.text_input(model_name_text.format(i+1), value=default_name,
+            model_name = col.text_input(f"Model {i+1} Name", value=f"Model-{chr(65+i)}",
                                       key=f"model_name_{i}_{st.session_state.input_reset_key}")
             model_names.append(model_name)
         
         # Number of data points - New control
         num_points = st.number_input(
-            num_points_text, 
+            "Number of Data Points", 
             min_value=3, 
             max_value=30, 
             value=st.session_state.num_data_points,
@@ -760,17 +503,67 @@ def handle_manual_input(frequency_option="Both", language="English"):
             frequencies_to_show.append("60Hz")
             
         # Option to use template data
-        default_use_template = st.session_state.manual_input_data.get('use_template', True)
-        use_template = st.checkbox(use_template_text, value=default_use_template,
+        use_template = st.checkbox("Use Template Data", value=True,
                                  key=f"use_template_{st.session_state.input_reset_key}")
         
-        # Generate head and flow data
-        template_head, template_flow_50hz, template_flow_60hz = generate_template_data(
-            num_points, model_names, use_template
-        )
+        # Template data for different frequencies
+        if use_template:
+            # Common head values for all models - Generate based on num_points
+            template_head = np.linspace(5.0, 50.0, num_points).tolist()
+            
+            # Flow values for each model at 50Hz - Generate curves based on num_points
+            template_flow_50hz = {}
+            
+            # Generate base model flow curve with appropriate number of points
+            base_flow_50hz = []
+            for i in range(num_points):
+                # Create a curve that gradually decreases from max to min flow
+                # as head increases (non-linear curve with steeper drop-off at end)
+                progress = i / (num_points - 1)  # 0 to 1
+                # Apply non-linear transformation for more realistic curve
+                flow_factor = 1 - (progress ** 1.5)  # Non-linear decrease
+                flow_value = 90.0 * flow_factor
+                base_flow_50hz.append(flow_value)
+            
+            # Set first model's flow
+            template_flow_50hz[model_names[0]] = base_flow_50hz
+            
+            # Flow values for each model at 60Hz (20% higher)
+            template_flow_60hz = {
+                model_names[0]: [flow * 1.2 for flow in base_flow_50hz],
+            }
+            
+            # Generate values for other models
+            for i, model in enumerate(model_names):
+                if i > 0:  # Skip first model which is already set
+                    multiplier = 1.0 + (0.15 * i)  # 15% increase for each model
+                    
+                    # Apply multiplier to base model flow values
+                    template_flow_50hz[model] = [flow * multiplier for flow in template_flow_50hz[model_names[0]]]
+                    template_flow_60hz[model] = [flow * multiplier for flow in template_flow_60hz[model_names[0]]]
+        else:
+            # Generate default head values (common for all models)
+            template_head = np.linspace(5.0, 50.0, num_points).tolist()
+            
+            # Generate flow values for each model at different frequencies
+            template_flow_50hz = {}
+            template_flow_60hz = {}
+            base_flow_50hz = 90.0  # Starting flow for first model at 50Hz
+            
+            for i, model in enumerate(model_names):
+                # Generate decreasing flow as head increases for 50Hz
+                max_flow_50hz = base_flow_50hz * (1.0 + 0.15 * i)  # Increase capacity for each model
+                min_flow_50hz = max_flow_50hz * 0.1  # End at 10% of max flow
+                
+                # 50Hz values
+                flows_50hz = np.linspace(max_flow_50hz, min_flow_50hz, num_points).tolist()
+                template_flow_50hz[model] = flows_50hz
+                
+                # 60Hz values (20% higher flow)
+                template_flow_60hz[model] = [flow * 1.2 for flow in flows_50hz]
         
         # Create editable dataframes for each frequency
-        st.markdown(edit_pump_data_text)
+        st.markdown("### Edit Pump Data Below")
         
         # Create tabs for each frequency
         frequency_tabs = st.tabs([f"{freq} Data" for freq in frequencies_to_show])
@@ -781,27 +574,19 @@ def handle_manual_input(frequency_option="Both", language="English"):
         # Create data editor for each frequency
         for i, freq in enumerate(frequencies_to_show):
             with frequency_tabs[i]:
-                st.info(edit_data_info_text.format(freq))
-                
-                # Try to get previously stored data for this frequency
-                stored_data = st.session_state.manual_input_data.get('edited_data', {}).get(freq, None)
+                st.info(f"Edit {freq} pump data below. Head values are common across models.")
                 
                 # Create the base dataframe for this frequency
-                if stored_data is not None:
-                    # Use stored data if available
-                    df_freq = stored_data
-                else:
-                    # Create new dataframe from templates
-                    df_freq = pd.DataFrame({
-                        f'Head ({head_unit})': template_head
-                    })
-                    
-                    # Add flow columns for each model
-                    for model in model_names:
-                        if freq == "50Hz":
-                            df_freq[f'{model} Flow ({flow_unit})'] = template_flow_50hz[model]
-                        else:  # 60Hz
-                            df_freq[f'{model} Flow ({flow_unit})'] = template_flow_60hz[model]
+                df_freq = pd.DataFrame({
+                    f'Head ({head_unit})': template_head
+                })
+                
+                # Add flow columns for each model
+                for model in model_names:
+                    if freq == "50Hz":
+                        df_freq[f'{model} Flow ({flow_unit})'] = template_flow_50hz[model]
+                    else:  # 60Hz
+                        df_freq[f'{model} Flow ({flow_unit})'] = template_flow_60hz[model]
                 
                 # Create a data editor for this frequency
                 edited_df = st.data_editor(
@@ -819,21 +604,12 @@ def handle_manual_input(frequency_option="Both", language="English"):
         # Submit button and Refresh Form button
         col1, col2 = st.columns(2)
         with col1:
-            submitted = st.form_submit_button(generate_curve_text)
+            submitted = st.form_submit_button("Generate Pump Curve")
         with col2:
             # Keep the Refresh Form button
-            refresh_data = st.form_submit_button(refresh_form_text)
+            refresh_data = st.form_submit_button("Refresh Form")
         
         if submitted:
-            # Save the current form state to session state
-            st.session_state.manual_input_data = {
-                'flow_unit': flow_unit,
-                'head_unit': head_unit,
-                'model_names': model_names,
-                'use_template': use_template,
-                'edited_data': edited_data
-            }
-            
             # Transform the edited data back into the format needed for plotting
             transformed_df = pd.DataFrame()
             
@@ -866,115 +642,12 @@ def handle_manual_input(frequency_option="Both", language="English"):
             st.session_state.chart_generated = True
             return transformed_df
         elif refresh_data:
-            # Save current data first
-            st.session_state.manual_input_data = {
-                'flow_unit': flow_unit,
-                'head_unit': head_unit,
-                'model_names': model_names,
-                'use_template': use_template,
-                'edited_data': edited_data
-            }
-            
-            # Capture current data before refreshing
-            transformed_df = pd.DataFrame()
-            
-            # Process data for each frequency
-            for freq in frequencies_to_show:
-                if freq in edited_data:
-                    df_freq = edited_data[freq]
-                    
-                    # Extract head values
-                    head_col = df_freq.columns[0]
-                    head_values = df_freq[head_col].values
-                    
-                    # Get flow columns
-                    flow_cols = [col for col in df_freq.columns if 'Flow' in col]
-                    
-                    # Process each model's flow column
-                    for flow_col in flow_cols:
-                        model_name = flow_col.split(' ')[0]  # Extract model name
-                        flow_values = df_freq[flow_col].values
-                        
-                        # Add to transformed dataframe
-                        if len(transformed_df) == 0:
-                            # First frequency and model, initialize with flow column
-                            transformed_df[f'Flow ({flow_unit})'] = flow_values
-                        
-                        # Add head column for this model and frequency
-                        transformed_df[f'{model_name} {freq} Head ({head_unit})'] = head_values
-            
             # Increment the reset key to force form refresh
             st.session_state.input_reset_key += 1
-            
-            # Show notification that form has been refreshed
-            st.session_state.show_refresh_notification = True
-            
-            # Set chart_generated to True if we have data
-            if not transformed_df.empty:
-                st.session_state.chart_generated = True
-                st.session_state.current_df = transformed_df
-            
-            # Return the transformed data
-            return transformed_df
+            # Just return the current data to update the form
+            return None
     
     return None
-
-def generate_template_data(num_points, model_names, use_template=True):
-    """Generate template data for pump curves"""
-    # Common head values for all models - Generate based on num_points
-    template_head = np.linspace(5.0, 50.0, num_points).tolist()
-    
-    if use_template:
-        # Flow values for each model at 50Hz - Generate curves based on num_points
-        template_flow_50hz = {}
-        
-        # Generate base model flow curve with appropriate number of points
-        base_flow_50hz = []
-        for i in range(num_points):
-            # Create a curve that gradually decreases from max to min flow
-            # as head increases (non-linear curve with steeper drop-off at end)
-            progress = i / (num_points - 1)  # 0 to 1
-            # Apply non-linear transformation for more realistic curve
-            flow_factor = 1 - (progress ** 1.5)  # Non-linear decrease
-            flow_value = 90.0 * flow_factor
-            base_flow_50hz.append(flow_value)
-        
-        # Set first model's flow
-        template_flow_50hz[model_names[0]] = base_flow_50hz
-        
-        # Flow values for each model at 60Hz (20% higher)
-        template_flow_60hz = {
-            model_names[0]: [flow * 1.2 for flow in base_flow_50hz],
-        }
-        
-        # Generate values for other models
-        for i, model in enumerate(model_names):
-            if i > 0:  # Skip first model which is already set
-                multiplier = 1.0 + (0.15 * i)  # 15% increase for each model
-                
-                # Apply multiplier to base model flow values
-                template_flow_50hz[model] = [flow * multiplier for flow in template_flow_50hz[model_names[0]]]
-                template_flow_60hz[model] = [flow * multiplier for flow in template_flow_60hz[model_names[0]]]
-    else:
-        # Generate default head values (common for all models)
-        # Generate flow values for each model at different frequencies
-        template_flow_50hz = {}
-        template_flow_60hz = {}
-        base_flow_50hz = 90.0  # Starting flow for first model at 50Hz
-        
-        for i, model in enumerate(model_names):
-            # Generate decreasing flow as head increases for 50Hz
-            max_flow_50hz = base_flow_50hz * (1.0 + 0.15 * i)  # Increase capacity for each model
-            min_flow_50hz = max_flow_50hz * 0.1  # End at 10% of max flow
-            
-            # 50Hz values
-            flows_50hz = np.linspace(max_flow_50hz, min_flow_50hz, num_points).tolist()
-            template_flow_50hz[model] = flows_50hz
-            
-            # 60Hz values (20% higher flow)
-            template_flow_60hz[model] = [flow * 1.2 for flow in flows_50hz]
-            
-    return template_head, template_flow_50hz, template_flow_60hz
 
 def generate_pump_curve(df, frequency_option="Both", chart_style="Modern", show_system_curve=False, 
                        static_head=0.0, k_factor=0.0, refresh_counter=0, min_flow=0.0, max_flow=None,
@@ -1228,20 +901,15 @@ def generate_pump_curve(df, frequency_option="Both", chart_style="Modern", show_
     
     return fig
 
-def download_button_for_plot(fig, language):
+def download_button_for_plot(fig):
     # Save figure to a temporary buffer
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=300, bbox_inches='tight')
     buf.seek(0)
     
-    # Create download button with language-specific label
-    if language == "Chinese":
-        download_label = "下載圖表 (PNG)"
-    else:
-        download_label = "Download Plot (PNG)"
-        
+    # Create download button
     btn = st.download_button(
-        label=download_label,
+        label="Download Plot (PNG)",
         data=buf,
         file_name="pump_curve_plot.png",
         mime="image/png"
