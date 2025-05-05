@@ -492,7 +492,7 @@ def handle_csv_upload(language):
         csv_template_text = "### 下载 CSV 模板"
         download_template_text = "下载 CSV 模板"
         detected_head_text = "检测到以扬程为首的数据格式。正在转换为图表所需的格式。"
-        no_flow_columns_text = "在 CSV 中未检测到流量列。请确保列名包含"Flow"。"
+        no_flow_columns_text = "在 CSV 中未检测到流量列。请确保列名包含'Flow'。"
     else:
         st.subheader("Upload CSV File")
         uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
