@@ -393,8 +393,7 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
                    label=f"{model_name} (50Hz)", color=color,
                    zorder=10+i)
             
-            # Also plot the original data points as markers
-            ax.scatter(flow_values, head_values, s=30, color=color, alpha=0.5, zorder=10+i)
+            # Removed the scatter plot of original data points
         
         # Plot 60Hz curve if requested (20% higher flow, 44% higher head)
         if '60Hz' in frequencies_to_plot:
