@@ -224,16 +224,26 @@ def main():
                 st.session_state.model_data[model_key] = new_df
                 current_df = new_df
             
-            # Data editor for this model
+            # Data editor for this model with callback to store changes
+            editor_key = f"data_editor_{model_names[i]}"
+            
+            # Define a callback to save edits
+            def save_edits():
+                if editor_key in st.session_state:
+                    st.session_state.model_data[model_key] = st.session_state[editor_key]
+            
+            # Create the data editor with on_change callback
             edited_df = st.data_editor(
                 current_df,
                 use_container_width=True,
                 num_rows="fixed",
-                key=f"data_editor_{model_names[i]}"
+                key=editor_key,
+                on_change=save_edits
             )
             
-            # Update the model data in session state
-            st.session_state.model_data[model_key] = edited_df
+            # Display a mini table showing saved values (for debugging)
+            with st.expander("View saved data", expanded=False):
+                st.write(st.session_state.model_data[model_key])
             
             # Add to all models data
             all_models_data[model_names[i]] = edited_df
