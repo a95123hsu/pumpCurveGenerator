@@ -613,9 +613,18 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
         ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
         ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
     else:
-        # Convert to integer and format without decimals
-        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x)}'))
-        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{int(y)}'))
+        # Formatter function that shows integers without decimals
+        def integer_formatter(value, pos):
+            try:
+                # Round to nearest integer and format without decimals
+                return f'{round(value)}'
+            except (ValueError, TypeError):
+                # Fallback for any conversion errors
+                return f'{value}'
+        
+        # Apply the formatters
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(integer_formatter))
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(integer_formatter))
     
     # Add grid based on user preference
     if show_grid:
