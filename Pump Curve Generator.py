@@ -241,10 +241,6 @@ def main():
                 on_change=save_edits
             )
             
-            # Display a mini table showing saved values (for debugging)
-            with st.expander("View saved data", expanded=False):
-                st.write(st.session_state.model_data[model_key])
-            
             # Add to all models data
             all_models_data[model_names[i]] = edited_df
     
