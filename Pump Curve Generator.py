@@ -286,6 +286,9 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
                        min_flow=0.0, max_flow=None, min_head=0.0, max_head=None, show_grid=True):
     """Generate pump curves from the model data dictionaries"""
     
+    # Import scipy for better curve interpolation
+    from scipy import interpolate
+    
     # Create a larger figure
     if chart_style == "Modern":
         plt.style.use('seaborn-v0_8-whitegrid')
@@ -326,24 +329,77 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
         head_values = df[head_col].values
         flow_values = df[flow_col].values
         
+        # Sort by flow for proper curve fit
+        sort_idx = np.argsort(flow_values)
+        flow_values = flow_values[sort_idx]
+        head_values = head_values[sort_idx]
+        
+        # Create spline interpolation for smoother curves
+        # If we have enough points, use cubic spline, otherwise use linear interpolation
+        if len(flow_values) >= 4 and len(np.unique(flow_values)) >= 4:
+            try:
+                # Use cubic spline interpolation for smooth curves
+                spline = interpolate.CubicSpline(flow_values, head_values)
+                
+                # Create high-resolution points for smooth curve
+                flow_smooth = np.linspace(min(flow_values), max(flow_values), num=100)
+                head_smooth = spline(flow_smooth)
+                
+                # Use these smooth points for plotting
+                plot_flow_values = flow_smooth
+                plot_head_values = head_smooth
+            except Exception:
+                # Fallback to B-spline interpolation if cubic spline fails
+                try:
+                    # Create a B-spline representation of the curve
+                    tck = interpolate.splrep(flow_values, head_values, s=0)
+                    
+                    # Create high-resolution points for smooth curve
+                    flow_smooth = np.linspace(min(flow_values), max(flow_values), num=100)
+                    head_smooth = interpolate.splev(flow_smooth, tck, der=0)
+                    
+                    # Use these smooth points for plotting
+                    plot_flow_values = flow_smooth
+                    plot_head_values = head_smooth
+                except Exception:
+                    # If all interpolation fails, use the original points
+                    plot_flow_values = flow_values
+                    plot_head_values = head_values
+        else:
+            # Not enough points for cubic spline, use linear interpolation
+            try:
+                # Create higher resolution points
+                flow_smooth = np.linspace(min(flow_values), max(flow_values), num=100)
+                head_smooth = np.interp(flow_smooth, flow_values, head_values)
+                
+                plot_flow_values = flow_smooth
+                plot_head_values = head_smooth
+            except Exception:
+                # If interpolation fails, use original points
+                plot_flow_values = flow_values
+                plot_head_values = head_values
+        
         # Update max values
-        max_flow_data = max(max_flow_data, np.max(flow_values))
-        max_head_data = max(max_head_data, np.max(head_values))
+        max_flow_data = max(max_flow_data, np.max(plot_flow_values))
+        max_head_data = max(max_head_data, np.max(plot_head_values))
         
         # Get color for this model
         color = colors[i % len(colors)]
         
         # Plot 50Hz curve (base data)
         if '50Hz' in frequencies_to_plot:
-            ax.plot(flow_values, head_values, 
+            ax.plot(plot_flow_values, plot_head_values, 
                    linestyle='-', linewidth=3.0, 
                    label=f"{model_name} (50Hz)", color=color,
                    zorder=10+i)
+            
+            # Also plot the original data points as markers
+            ax.scatter(flow_values, head_values, s=30, color=color, alpha=0.5, zorder=10+i)
         
         # Plot 60Hz curve if requested (20% higher flow, 44% higher head)
         if '60Hz' in frequencies_to_plot:
-            flow_values_60hz = flow_values * 1.2
-            head_values_60hz = head_values * 1.44
+            flow_values_60hz = plot_flow_values * 1.2
+            head_values_60hz = plot_head_values * 1.44
             
             ax.plot(flow_values_60hz, head_values_60hz, 
                    linestyle='--', linewidth=3.0, 
