@@ -1,314 +1,10 @@
-def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency_option="50Hz Only", 
-                       chart_style="Modern", show_system_curve=False, static_head=0.0, k_factor=0.0, 
-                       min_flow=0.0, max_flow=None, min_head=0.0, max_head=None, show_grid=True,
-                       x_tick_spacing=0.0, y_tick_spacing=0.0, x_log_scale=False, y_log_scale=False):
-    """Generate pump curves from the model data dictionaries"""
-    
-    # Import scipy for better curve interpolation
-    from scipy import interpolate
-    import matplotlib.ticker as ticker
-    import pandas as pd
-    import numpy as np
-    import matplotlib.pyplot as plt
-    import io
-    import base64
-    from matplotlib.ticker import MaxNLocator, AutoMinorLocator
-    
-    # Create a larger figure
-    if chart_style == "Modern":
-        plt.style.use('seaborn-v0_8-whitegrid')
-        fig, ax = plt.subplots(figsize=(12, 8))
-    else:
-        plt.style.use('classic')
-        fig, ax = plt.subplots(figsize=(12, 8))
-    
-    # Increase figure margins to make room for axes labels
-    plt.subplots_adjust(bottom=0.2, right=0.9)
-    
-    # Set logarithmic scales if requested
-    if x_log_scale:
-        ax.set_xscale('log')
-    if y_log_scale:
-        ax.set_yscale('log')
-    
-    # Determine which frequencies to plot
-    frequencies_to_plot = []
-    if frequency_option == "50Hz Only" or frequency_option == "Both":
-        frequencies_to_plot.append('50Hz')
-    if frequency_option == "60Hz Only" or frequency_option == "Both":
-        frequencies_to_plot.append('60Hz')
-    
-    # Get color cycle for plots
-    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    
-    # Find maximum flow and head for setting axis limits
-    max_flow_data = 0
-    max_head_data = 0
-    
-    # Plot each pump model
-    for i, model_name in enumerate(model_names):
-        if model_name not in model_data:
-            continue
-            
-        df = model_data[model_name]
-        
-        # Get column names
-        head_col = df.columns[0]  # First column is head
-        flow_col = df.columns[1]  # Second column is flow
-        
-        # Extract data
-        head_values = df[head_col].values
-        flow_values = df[flow_col].values
-        
-        # Sort by flow for proper curve fit
-        sort_idx = np.argsort(flow_values)
-        flow_values = flow_values[sort_idx]
-        head_values = head_values[sort_idx]
-        
-        # Create spline interpolation for smoother curves
-        # If we have enough points, use cubic spline, otherwise use linear interpolation
-        if len(flow_values) >= 4 and len(np.unique(flow_values)) >= 4:
-            try:
-                # Use cubic spline interpolation for smooth curves
-                spline = interpolate.CubicSpline(flow_values, head_values)
-                
-                # Create high-resolution points for smooth curve
-                flow_smooth = np.linspace(min(flow_values), max(flow_values), num=100)
-                head_smooth = spline(flow_smooth)
-                
-                # Use these smooth points for plotting
-                plot_flow_values = flow_smooth
-                plot_head_values = head_smooth
-            except Exception:
-                # Fallback to B-spline interpolation if cubic spline fails
-                try:
-                    # Create a B-spline representation of the curve
-                    tck = interpolate.splrep(flow_values, head_values, s=0)
-                    
-                    # Create high-resolution points for smooth curve
-                    flow_smooth = np.linspace(min(flow_values), max(flow_values), num=100)
-                    head_smooth = interpolate.splev(flow_smooth, tck, der=0)
-                    
-                    # Use these smooth points for plotting
-                    plot_flow_values = flow_smooth
-                    plot_head_values = head_smooth
-                except Exception:
-                    # If all interpolation fails, use the original points
-                    plot_flow_values = flow_values
-                    plot_head_values = head_values
-        else:
-            # Not enough points for cubic spline, use linear interpolation
-            try:
-                # Create higher resolution points
-                flow_smooth = np.linspace(min(flow_values), max(flow_values), num=100)
-                head_smooth = np.interp(flow_smooth, flow_values, head_values)
-                
-                plot_flow_values = flow_smooth
-                plot_head_values = head_smooth
-            except Exception:
-                # If interpolation fails, use original points
-                plot_flow_values = flow_values
-                plot_head_values = head_values
-        
-        # Update max values
-        max_flow_data = max(max_flow_data, np.max(plot_flow_values))
-        max_head_data = max(max_head_data, np.max(plot_head_values))
-        
-        # Get color for this model
-        color = colors[i % len(colors)]
-        
-        # Plot 50Hz curve (base data)
-        if '50Hz' in frequencies_to_plot:
-            ax.plot(plot_flow_values, plot_head_values, 
-                   linestyle='-', linewidth=3.0, 
-                   label=f"{model_name} (50Hz)", color=color,
-                   zorder=10+i)
-        
-        # Plot 60Hz curve if requested (20% higher flow, 44% higher head)
-        if '60Hz' in frequencies_to_plot:
-            flow_values_60hz = plot_flow_values * 1.2
-            head_values_60hz = plot_head_values * 1.44
-            
-            ax.plot(flow_values_60hz, head_values_60hz, 
-                   linestyle='--', linewidth=3.0, 
-                   label=f"{model_name} (60Hz)", color=color,
-                   zorder=20+i)
-            
-            # Update max values for 60Hz
-            max_flow_data = max(max_flow_data, np.max(flow_values_60hz))
-            max_head_data = max(max_head_data, np.max(head_values_60hz))
-    
-    # Add system curve if requested
-    if show_system_curve:
-        # Determine maximum flow value for system curve
-        if max_flow is None:
-            max_flow_val = max_flow_data * 1.5
-        else:
-            max_flow_val = max_flow
-        
-        # Create system curve
-        system_flows = np.linspace(0, max_flow_val, 100)
-        system_heads = static_head + k_factor * (system_flows ** 2)
-        
-        # Plot system curve
-        ax.plot(system_flows, system_heads, 'r-', linewidth=2.5, 
-               label=f'System Curve (H={static_head}+{k_factor:.6f}×Q²)',
-               zorder=30)
-        
-        # Find and plot intersection points
-        for i, model_name in enumerate(model_names):
-            if model_name not in model_data:
-                continue
-                
-            df = model_data[model_name]
-            
-            # Get data
-            head_col = df.columns[0]
-            flow_col = df.columns[1]
-            head_values = df[head_col].values
-            flow_values = df[flow_col].values
-            
-            color = colors[i % len(colors)]
-            
-            # For 50Hz data
-            if '50Hz' in frequencies_to_plot:
-                try:
-                    from scipy.interpolate import interp1d
-                    
-                    # Sort data points by flow for interpolation
-                    sorted_indices = np.argsort(flow_values)
-                    sorted_flows = flow_values[sorted_indices]
-                    sorted_heads = head_values[sorted_indices]
-                    
-                    if len(np.unique(sorted_flows)) >= 2:
-                        pump_curve_func = interp1d(sorted_flows, sorted_heads, 
-                                                 bounds_error=False, fill_value="extrapolate")
-                        
-                        from scipy.optimize import minimize_scalar
-                        
-                        diff_func = lambda q: abs(pump_curve_func(q) - (static_head + k_factor * q**2))
-                        
-                        result = minimize_scalar(diff_func, 
-                                               bounds=(min(sorted_flows), max(sorted_flows)), 
-                                               method='bounded')
-                        
-                        if result.success:
-                            op_flow = result.x
-                            op_head = static_head + k_factor * op_flow**2
-                            
-                            if min(sorted_flows) <= op_flow <= max(sorted_flows):
-                                # Plot operating point
-                                ax.plot(op_flow, op_head, 'o', markersize=8, color=color, zorder=40)
-                                
-                                # Add annotation
-                                ax.annotate(f"{model_name} (50Hz): ({op_flow:.1f}, {op_head:.1f})",
-                                          xy=(op_flow, op_head),
-                                          xytext=(10, 5),
-                                          textcoords='offset points',
-                                          color=color,
-                                          fontweight='bold',
-                                          zorder=45)
-                except Exception as e:
-                    print(f"Error finding 50Hz intersection: {e}")
-            
-            # For 60Hz data
-            if '60Hz' in frequencies_to_plot:
-                flow_values_60hz = flow_values * 1.2
-                head_values_60hz = head_values * 1.44
-                
-                try:
-                    from scipy.interpolate import interp1d
-                    
-                    # Sort data points by flow for interpolation
-                    sorted_indices = np.argsort(flow_values_60hz)
-                    sorted_flows = flow_values_60hz[sorted_indices]
-                    sorted_heads = head_values_60hz[sorted_indices]
-                    
-                    if len(np.unique(sorted_flows)) >= 2:
-                        pump_curve_func = interp1d(sorted_flows, sorted_heads, 
-                                                 bounds_error=False, fill_value="extrapolate")
-                        
-                        from scipy.optimize import minimize_scalar
-                        
-                        diff_func = lambda q: abs(pump_curve_func(q) - (static_head + k_factor * q**2))
-                        
-                        result = minimize_scalar(diff_func, 
-                                               bounds=(min(sorted_flows), max(sorted_flows)), 
-                                               method='bounded')
-                        
-                        if result.success:
-                            op_flow = result.x
-                            op_head = static_head + k_factor * op_flow**2
-                            
-                            if min(sorted_flows) <= op_flow <= max(sorted_flows):
-                                # Plot operating point
-                                ax.plot(op_flow, op_head, 's', markersize=8, color=color, zorder=40)
-                                
-                                # Add annotation
-                                ax.annotate(f"{model_name} (60Hz): ({op_flow:.1f}, {op_head:.1f})",
-                                          xy=(op_flow, op_head),
-                                          xytext=(10, -15),
-                                          textcoords='offset points',
-                                          color=color,
-                                          fontweight='bold',
-                                          zorder=45)
-                except Exception as e:
-                    print(f"Error finding 60Hz intersection: {e}")
-    
-    # Set up axis labels
-    ax.set_xlabel(f'Flow ({flow_unit})', fontsize=12, fontweight='bold')
-    ax.set_ylabel(f'Head ({head_unit})', fontsize=12, fontweight='bold')
-    
-    # Set custom tick spacing if provided
-    if x_tick_spacing > 0:
-        ax.xaxis.set_major_locator(ticker.MultipleLocator(x_tick_spacing))
-    else:
-        # Limit number of ticks to prevent overcrowding
-        ax.xaxis.set_major_locator(ticker.MaxNLocator(7))
-    
-    if y_tick_spacing > 0:
-        ax.yaxis.set_major_locator(ticker.MultipleLocator(y_tick_spacing))
-    else:
-        ax.yaxis.set_major_locator(ticker.MaxNLocator(7))
-    
-    # Format tick labels to 1 decimal place (for non-log scales)
-    if not x_log_scale:
-        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
-    if not y_log_scale:
-        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
-    
-    # Add grid based on user preference
-    if show_grid:
-        ax.grid(True, which='major', linestyle='-', linewidth=0.5)
-        if chart_style == "Modern":
-            ax.grid(True, which='minor', linestyle=':', linewidth=0.5, alpha=0.7)
-    else:
-        ax.grid(False)
-    
-    # Add minor ticks (only for non-log scales)
-    if not x_log_scale:
-        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-    if not y_log_scale:
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-    
-    # Apply custom axis limits if provided
-    x_padding = max_flow_data * 0.1  # 10% padding
-    if max_flow is None:
-        if '60Hz' in frequencies_to_plot:
-            # Add extra space for 60Hz curves (20% higher flow)
-            max_flow_to_use = max_flow_data * 1.2 * 1.1  # 20% for 60Hz + 10% padding
-        else:
-            max_flow_to_use = max_flow_data * 1.1  # Just 10% padding
-    else:
-        max_flow_to_use = float(max_flow)
-    
-    ax.set_xlim(left=float(min_flow), right=max_flow_to_use)
-    
-    # Set y-axis limits with padding
-    y_padding = max_head_data * 0.1  # 10% padding
-    if max_head is None:
-        if '60Hz' in frequencies_to_plot:
-            # Add extra space for 60Hz curves (import streamlit as s
+import streamlit as st
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import io
+import base64
+from matplotlib.ticker import MaxNLocator, AutoMinorLocator
 
 def main():
     st.set_page_config(page_title="Pump Curve Plotter", layout="wide")
@@ -403,110 +99,51 @@ def main():
                 )
                 st.session_state.chart_params['k_factor'] = k_factor
         
-        # Add axis range controls with improved options
-        st.subheader("Axis Range and Scale Settings")
+        # Add axis range controls
+        st.subheader("Axis Range Settings")
+        col_g, col_h, col_i, col_j = st.columns(4)
         
-        # X-axis settings in one expander
-        with st.expander("X-Axis (Flow) Settings", expanded=False):
-            # X-axis limits
-            col_x1, col_x2 = st.columns(2)
-            with col_x1:
-                min_flow = st.number_input(
-                    "Min Flow", 
-                    min_value=0.0,
-                    value=float(st.session_state.chart_params.get('min_flow', 0.0)), 
-                    step=10.0
-                )
-                st.session_state.chart_params['min_flow'] = min_flow
+        with col_g:
+            min_flow = st.number_input(
+                "Min Flow", 
+                min_value=0.0,
+                value=float(st.session_state.chart_params['min_flow'] or 0.0), 
+                step=10.0
+            )
+            st.session_state.chart_params['min_flow'] = min_flow
             
-            with col_x2:
-                max_flow_value = st.session_state.chart_params.get('max_flow')
-                max_flow_value = float(max_flow_value) if max_flow_value is not None else 0.0
-                
-                max_flow = st.number_input(
-                    "Max Flow (0 for auto)", 
-                    min_value=0.0,
-                    value=max_flow_value, 
-                    step=100.0
-                )
-                st.session_state.chart_params['max_flow'] = max_flow if max_flow > 0 else None
+        with col_h:
+            max_flow_value = st.session_state.chart_params['max_flow']
+            max_flow_value = float(max_flow_value) if max_flow_value is not None else 0.0
             
-            # X-axis tick spacing
-            col_x3, col_x4 = st.columns(2)
-            with col_x3:
-                # Initialize x_tick_spacing if it doesn't exist
-                if 'x_tick_spacing' not in st.session_state.chart_params:
-                    st.session_state.chart_params['x_tick_spacing'] = 0.0
-                
-                x_tick_spacing = st.number_input(
-                    "Flow Tick Spacing (0 for auto)",
-                    min_value=0.0,
-                    value=float(st.session_state.chart_params.get('x_tick_spacing', 0.0)),
-                    step=10.0
-                )
-                st.session_state.chart_params['x_tick_spacing'] = x_tick_spacing
+            max_flow = st.number_input(
+                "Max Flow (0 for auto)", 
+                min_value=0.0,
+                value=max_flow_value, 
+                step=100.0
+            )
+            st.session_state.chart_params['max_flow'] = max_flow if max_flow > 0 else None
             
-            with col_x4:
-                # Initialize x_log_scale if it doesn't exist
-                if 'x_log_scale' not in st.session_state.chart_params:
-                    st.session_state.chart_params['x_log_scale'] = False
-                
-                x_log_scale = st.checkbox(
-                    "Logarithmic Flow Scale",
-                    value=st.session_state.chart_params.get('x_log_scale', False)
-                )
-                st.session_state.chart_params['x_log_scale'] = x_log_scale
-        
-        # Y-axis settings in another expander
-        with st.expander("Y-Axis (Head) Settings", expanded=False):
-            # Y-axis limits
-            col_y1, col_y2 = st.columns(2)
-            with col_y1:
-                min_head = st.number_input(
-                    "Min Head", 
-                    min_value=0.0,
-                    value=float(st.session_state.chart_params.get('min_head', 0.0)), 
-                    step=1.0
-                )
-                st.session_state.chart_params['min_head'] = min_head
+        with col_i:
+            min_head = st.number_input(
+                "Min Head", 
+                min_value=0.0,
+                value=float(st.session_state.chart_params['min_head'] or 0.0), 
+                step=1.0
+            )
+            st.session_state.chart_params['min_head'] = min_head
             
-            with col_y2:
-                max_head_value = st.session_state.chart_params.get('max_head')
-                max_head_value = float(max_head_value) if max_head_value is not None else 0.0
-                
-                max_head = st.number_input(
-                    "Max Head (0 for auto)", 
-                    min_value=0.0,
-                    value=max_head_value, 
-                    step=1.0
-                )
-                st.session_state.chart_params['max_head'] = max_head if max_head > 0 else None
+        with col_j:
+            max_head_value = st.session_state.chart_params['max_head']
+            max_head_value = float(max_head_value) if max_head_value is not None else 0.0
             
-            # Y-axis tick spacing
-            col_y3, col_y4 = st.columns(2)
-            with col_y3:
-                # Initialize y_tick_spacing if it doesn't exist
-                if 'y_tick_spacing' not in st.session_state.chart_params:
-                    st.session_state.chart_params['y_tick_spacing'] = 0.0
-                
-                y_tick_spacing = st.number_input(
-                    "Head Tick Spacing (0 for auto)",
-                    min_value=0.0,
-                    value=float(st.session_state.chart_params.get('y_tick_spacing', 0.0)),
-                    step=5.0
-                )
-                st.session_state.chart_params['y_tick_spacing'] = y_tick_spacing
-            
-            with col_y4:
-                # Initialize y_log_scale if it doesn't exist
-                if 'y_log_scale' not in st.session_state.chart_params:
-                    st.session_state.chart_params['y_log_scale'] = False
-                
-                y_log_scale = st.checkbox(
-                    "Logarithmic Head Scale",
-                    value=st.session_state.chart_params.get('y_log_scale', False)
-                )
-                st.session_state.chart_params['y_log_scale'] = y_log_scale
+            max_head = st.number_input(
+                "Max Head (0 for auto)", 
+                min_value=0.0,
+                value=max_head_value, 
+                step=1.0
+            )
+            st.session_state.chart_params['max_head'] = max_head if max_head > 0 else None
     
     # Data input section
     st.subheader("Pump Data Input")
@@ -632,11 +269,7 @@ def main():
                 max_flow=st.session_state.chart_params['max_flow'],
                 min_head=st.session_state.chart_params['min_head'],
                 max_head=st.session_state.chart_params['max_head'],
-                show_grid=st.session_state.chart_params['show_grid'],
-                x_tick_spacing=st.session_state.chart_params.get('x_tick_spacing', 0.0),
-                y_tick_spacing=st.session_state.chart_params.get('y_tick_spacing', 0.0),
-                x_log_scale=st.session_state.chart_params.get('x_log_scale', False),
-                y_log_scale=st.session_state.chart_params.get('y_log_scale', False)
+                show_grid=st.session_state.chart_params['show_grid']
             )
             
             st.pyplot(fig)
