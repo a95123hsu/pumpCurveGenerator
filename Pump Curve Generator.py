@@ -42,6 +42,8 @@ def main():
             'show_grid': True,
             'flow_tick_spacing': None,
             'head_tick_spacing': None,
+            'show_decimals': True,
+            'model_colors': {},
         }
     
     # Configuration section
@@ -188,14 +190,44 @@ def main():
         num_points = st.number_input("Number of Data Points", min_value=3, max_value=20, value=st.session_state.num_points)
         st.session_state.num_points = num_points
     
-    # Model names input
+    # Model names input with color pickers
     model_names = []
-    col_names = st.columns(num_models)
-    for i in range(num_models):
-        default_name = f"Model-{chr(65+i)}"
-        with col_names[i]:
-            model_name = st.text_input(f"Model {i+1} Name", value=default_name, key=f"model_name_{i}")
-            model_names.append(model_name)
+    st.subheader("Model Names and Colors")
+    
+    # Create rows of columns for model inputs
+    rows = (num_models + 2) // 3  # Ceiling division to get number of rows needed (3 models per row)
+    for row in range(rows):
+        cols = st.columns(3)
+        for col_idx in range(3):
+            model_idx = row * 3 + col_idx
+            if model_idx < num_models:
+                with cols[col_idx]:
+                    default_name = f"Model-{chr(65+model_idx)}"
+                    model_name = st.text_input(
+                        f"Model {model_idx+1} Name", 
+                        value=default_name, 
+                        key=f"model_name_{model_idx}"
+                    )
+                    model_names.append(model_name)
+                    
+                    # Default colors based on matplotlib default color cycle
+                    default_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+                    default_color = default_colors[model_idx % len(default_colors)]
+                    
+                    # Get existing color or use default
+                    current_color = st.session_state.chart_params.get('model_colors', {}).get(model_name, default_color)
+                    
+                    # Color picker
+                    selected_color = st.color_picker(
+                        f"Select color for {model_name}", 
+                        value=current_color,
+                        key=f"color_picker_{model_idx}"
+                    )
+                    
+                    # Store selected color in session state
+                    if 'model_colors' not in st.session_state.chart_params:
+                        st.session_state.chart_params['model_colors'] = {}
+                    st.session_state.chart_params['model_colors'][model_name] = selected_color
     
     # Create tabs for each model
     model_tabs = st.tabs(model_names)
@@ -291,7 +323,9 @@ def main():
                 max_head=st.session_state.chart_params['max_head'],
                 show_grid=st.session_state.chart_params['show_grid'],
                 flow_tick_spacing=st.session_state.chart_params.get('flow_tick_spacing'),
-                head_tick_spacing=st.session_state.chart_params.get('head_tick_spacing')
+                head_tick_spacing=st.session_state.chart_params.get('head_tick_spacing'),
+                show_decimals=st.session_state.chart_params.get('show_decimals', True),
+                model_colors=st.session_state.chart_params.get('model_colors', {})
             )
             
             st.pyplot(fig)
@@ -306,7 +340,8 @@ def main():
 def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency_option="50Hz Only", 
                        chart_style="Modern", show_system_curve=False, static_head=0.0, k_factor=0.0, 
                        min_flow=0.0, max_flow=None, min_head=0.0, max_head=None, show_grid=True,
-                       flow_tick_spacing=None, head_tick_spacing=None):
+                       flow_tick_spacing=None, head_tick_spacing=None, show_decimals=True,
+                       model_colors=None):
     """Generate pump curves from the model data dictionaries"""
     
     # Import scipy for better curve interpolation
@@ -330,12 +365,12 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
     if frequency_option == "60Hz Only" or frequency_option == "Both":
         frequencies_to_plot.append('60Hz')
     
-    # Get color cycle for plots
-    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-    
-    # Find maximum flow and head for setting axis limits
-    max_flow_data = 0
-    max_head_data = 0
+    # Get model colors from the provided dictionary or use default colors
+    if model_colors is None:
+        model_colors = {}
+        
+    # Default colors from matplotlib color cycle
+    default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     
     # Plot each pump model
     for i, model_name in enumerate(model_names):
@@ -406,8 +441,11 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
         max_flow_data = max(max_flow_data, np.max(plot_flow_values))
         max_head_data = max(max_head_data, np.max(plot_head_values))
         
-        # Get color for this model
-        color = colors[i % len(colors)]
+        # Get color for this model - use custom color if provided, otherwise use default
+        if model_name in model_colors and model_colors[model_name]:
+            color = model_colors[model_name]
+        else:
+            color = default_colors[i % len(default_colors)]
         
         # Plot 50Hz curve (base data)
         if '50Hz' in frequencies_to_plot:
@@ -566,9 +604,13 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
     else:
         ax.yaxis.set_major_locator(MaxNLocator(7))
     
-    # Format tick labels to 1 decimal place
-    ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
+    # Format tick labels based on show_decimals setting
+    if show_decimals:
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
+    else:
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{int(x)}'))
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{int(y)}'))
     
     # Add grid based on user preference
     if show_grid:
