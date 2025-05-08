@@ -40,6 +40,8 @@ def main():
             'min_flow': 0.0,
             'min_head': 0.0,
             'show_grid': True,
+            'flow_tick_spacing': None,
+            'head_tick_spacing': None,
         }
     
     # Configuration section
@@ -107,13 +109,13 @@ def main():
             min_flow = st.number_input(
                 "Min Flow", 
                 min_value=0.0,
-                value=float(st.session_state.chart_params['min_flow'] or 0.0), 
+                value=float(st.session_state.chart_params.get('min_flow', 0.0) or 0.0), 
                 step=10.0
             )
             st.session_state.chart_params['min_flow'] = min_flow
             
         with col_h:
-            max_flow_value = st.session_state.chart_params['max_flow']
+            max_flow_value = st.session_state.chart_params.get('max_flow')
             max_flow_value = float(max_flow_value) if max_flow_value is not None else 0.0
             
             max_flow = st.number_input(
@@ -128,13 +130,13 @@ def main():
             min_head = st.number_input(
                 "Min Head", 
                 min_value=0.0,
-                value=float(st.session_state.chart_params['min_head'] or 0.0), 
+                value=float(st.session_state.chart_params.get('min_head', 0.0) or 0.0), 
                 step=1.0
             )
             st.session_state.chart_params['min_head'] = min_head
             
         with col_j:
-            max_head_value = st.session_state.chart_params['max_head']
+            max_head_value = st.session_state.chart_params.get('max_head')
             max_head_value = float(max_head_value) if max_head_value is not None else 0.0
             
             max_head = st.number_input(
@@ -144,6 +146,28 @@ def main():
                 step=1.0
             )
             st.session_state.chart_params['max_head'] = max_head if max_head > 0 else None
+            
+        # Add tick spacing controls
+        st.subheader("Axis Tick Settings")
+        col_k, col_l = st.columns(2)
+        
+        with col_k:
+            flow_tick_spacing = st.number_input(
+                "Flow Tick Spacing (0 for auto)",
+                min_value=0.0,
+                value=float(st.session_state.chart_params.get('flow_tick_spacing', 0.0) or 0.0),
+                step=10.0
+            )
+            st.session_state.chart_params['flow_tick_spacing'] = flow_tick_spacing if flow_tick_spacing > 0 else None
+            
+        with col_l:
+            head_tick_spacing = st.number_input(
+                "Head Tick Spacing (0 for auto)",
+                min_value=0.0,
+                value=float(st.session_state.chart_params.get('head_tick_spacing', 0.0) or 0.0),
+                step=5.0
+            )
+            st.session_state.chart_params['head_tick_spacing'] = head_tick_spacing if head_tick_spacing > 0 else None
     
     # Data input section
     st.subheader("Pump Data Input")
@@ -265,7 +289,9 @@ def main():
                 max_flow=st.session_state.chart_params['max_flow'],
                 min_head=st.session_state.chart_params['min_head'],
                 max_head=st.session_state.chart_params['max_head'],
-                show_grid=st.session_state.chart_params['show_grid']
+                show_grid=st.session_state.chart_params['show_grid'],
+                flow_tick_spacing=st.session_state.chart_params.get('flow_tick_spacing'),
+                head_tick_spacing=st.session_state.chart_params.get('head_tick_spacing')
             )
             
             st.pyplot(fig)
@@ -279,7 +305,8 @@ def main():
 
 def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency_option="50Hz Only", 
                        chart_style="Modern", show_system_curve=False, static_head=0.0, k_factor=0.0, 
-                       min_flow=0.0, max_flow=None, min_head=0.0, max_head=None, show_grid=True):
+                       min_flow=0.0, max_flow=None, min_head=0.0, max_head=None, show_grid=True,
+                       flow_tick_spacing=None, head_tick_spacing=None):
     """Generate pump curves from the model data dictionaries"""
     
     # Import scipy for better curve interpolation
@@ -526,9 +553,18 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
     ax.set_xlabel(f'Flow ({flow_unit})', fontsize=12, fontweight='bold')
     ax.set_ylabel(f'Head ({head_unit})', fontsize=12, fontweight='bold')
     
-    # Limit number of ticks to prevent overcrowding
-    ax.xaxis.set_major_locator(MaxNLocator(7))
-    ax.yaxis.set_major_locator(MaxNLocator(7))
+    # Set custom tick spacing if provided, otherwise use automatic tick spacing
+    if flow_tick_spacing is not None and flow_tick_spacing > 0:
+        from matplotlib.ticker import MultipleLocator
+        ax.xaxis.set_major_locator(MultipleLocator(flow_tick_spacing))
+    else:
+        ax.xaxis.set_major_locator(MaxNLocator(7))
+        
+    if head_tick_spacing is not None and head_tick_spacing > 0:
+        from matplotlib.ticker import MultipleLocator
+        ax.yaxis.set_major_locator(MultipleLocator(head_tick_spacing))
+    else:
+        ax.yaxis.set_major_locator(MaxNLocator(7))
     
     # Format tick labels to 1 decimal place
     ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
