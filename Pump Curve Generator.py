@@ -7,6 +7,12 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
     # Import scipy for better curve interpolation
     from scipy import interpolate
     import matplotlib.ticker as ticker
+    import pandas as pd
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import io
+    import base64
+    from matplotlib.ticker import MaxNLocator, AutoMinorLocator
     
     # Create a larger figure
     if chart_style == "Modern":
@@ -302,13 +308,7 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
     y_padding = max_head_data * 0.1  # 10% padding
     if max_head is None:
         if '60Hz' in frequencies_to_plot:
-            # Add extra space for 60Hz curves (import streamlit as st
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import io
-import base64
-from matplotlib.ticker import MaxNLocator, AutoMinorLocator
+            # Add extra space for 60Hz curves (import streamlit as s
 
 def main():
     st.set_page_config(page_title="Pump Curve Plotter", layout="wide")
