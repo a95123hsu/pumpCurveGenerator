@@ -365,6 +365,10 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
     if frequency_option == "60Hz Only" or frequency_option == "Both":
         frequencies_to_plot.append('60Hz')
     
+    # Initialize maximum values
+    max_flow_data = 0
+    max_head_data = 0
+    
     # Get model colors from the provided dictionary or use default colors
     if model_colors is None:
         model_colors = {}
