@@ -301,7 +301,7 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
     # Set y-axis limits with padding
     y_padding = max_head_data * 0.1  # 10% padding
     if max_head is None:
-      if '60Hz' in frequencies_to_plot:
+        if '60Hz' in frequencies_to_plot:
             # Add extra space for 60Hz curves (import streamlit as st
 import pandas as pd
 import numpy as np
