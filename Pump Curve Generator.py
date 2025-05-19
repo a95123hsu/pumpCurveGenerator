@@ -603,8 +603,8 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
                 plot_flow_values = flow_smooth
                 plot_head_values = head_smooth
             except Exception:
-                # If interpolation fails, use original points
-               plot_flow_values = flow_values
+                # If interpolation fails, use original point
+                plot_flow_values = flow_values
                 plot_head_values = head_values
         
         # Update max values
