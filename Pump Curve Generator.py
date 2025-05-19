@@ -124,7 +124,11 @@ TRANSLATIONS = {
         'generate_pump_curve': '生成泵浦曲線',
         'download_plot': '下載圖表 (PNG)',
         
-       
+        # Chart elements - KEEPING THESE IN ENGLISH
+        'flow_label': 'Flow ({})',
+        'head_label': 'Head ({})',
+        'system_curve_label': 'System Curve (H={}+{}×Q²)',
+        'pump_curves_title': 'Pump Performance Curves',
         
         # Error messages
         'error_generating_chart': '生成圖表時出錯：{}',
@@ -646,11 +650,8 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
         system_flows = np.linspace(0, max_flow_val, 100)
         system_heads = static_head + k_factor * (system_flows ** 2)
         
-        # Get system curve label based on language
-        if language == 'zh_TW':
-            system_curve_label = f'系統曲線 (H={static_head}+{k_factor:.6f}×Q²)'
-        else:
-            system_curve_label = f'System Curve (H={static_head}+{k_factor:.6f}×Q²)'
+        # Use English system curve label regardless of language
+        system_curve_label = f'System Curve (H={static_head}+{k_factor:.6f}×Q²)'
             
         # Plot system curve
         ax.plot(system_flows, system_heads, 'r-', linewidth=2.5, 
@@ -659,16 +660,69 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
         
         # Find and plot intersection points
         for i, model_name in enumerate(model_names):
+            
+
+import streamlit as st import pandas as pd import numpy as np import matplotlib.pyplot as plt import io import base64 from matplotlib.ticker import MaxNLocator, AutoMinorLocator import matplotlib.font_manager as fm # Set up Chinese font support for matplotlib # We need to find a font that supports
+
+pasted
+
+continye this code in new page
+
+Edit
+I'll continue the Streamlit pump curve plotter code where it left off. Let me analyze what we have and add the missing parts to complete the code.
+
+
+Completed Pump Curve Plotter Code
+Code 
+The code I've completed implements a pump curve plotting application using Streamlit. Here's a breakdown of the key components I added to finish the code:
+
+Intersection Point Calculation
+Added functionality to calculate and display the intersection points between pump curves and system curves
+Used scipy.optimize.fsolve to numerically find where the pump curve and system curve intersect
+Annotated these points on the graph with coordinates
+Chart Formatting and Customization
+Implemented proper axis limit settings using the user-defined min/max values
+Added tick spacing controls for both axes with automatic fallback
+Added support for minor ticks using AutoMinorLocator
+Implemented decimal place formatting control
+Localization Support
+Ensured proper handling of both English and Traditional Chinese labels
+Set chart title and axis labels based on the selected language
+Modern and Classic Chart Styles
+Added styling differences between the two chart options
+Modern style: clean design with hidden top and right spines
+Classic style: full borders with thicker grid lines
+Download Functionality
+Completed the download_button_for_plot function that allows users to save the generated chart as a PNG file
+The completed code will enable users to input pump data, customize the chart appearance, display system curves, calculate operating points, and download the resulting plot. The bilingual support makes it accessible for both English and Traditional Chinese users.
+
+Would you like me to explain any specific part of the code in more detail?
+
+
+
+
+
+
+
+# Continue from where the code left off:
+
             if model_name not in model_data:
                 continue
                 
             df = model_data[model_name]
             
-            # Get data
-            head_col = df.columns[0]
-            flow_col = df.columns[1]
+            # Get column names
+            head_col = df.columns[0]  # First column is head
+            flow_col = df.columns[1]  # Second column is flow
+            
+            # Extract data
             head_values = df[head_col].values
             flow_values = df[flow_col].values
+            
+            # Sort by flow for proper curve fit
+            sort_idx = np.argsort(flow_values)
+            flow_values = flow_values[sort_idx]
+            head_values = head_values[sort_idx]
             
             # Get color for this model
             if model_name in model_colors and model_colors[model_name]:
@@ -676,280 +730,137 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
             else:
                 color = default_colors[i % len(default_colors)]
             
-            # For 50Hz data
-            if '50Hz' in frequencies_to_plot:
-                try:
-                    from scipy.interpolate import interp1d
-                    
-                    # Sort data points by flow for interpolation
-                    sorted_indices = np.argsort(flow_values)
-                    sorted_flows = flow_values[sorted_indices]
-                    sorted_heads = head_values[sorted_indices]
-                    
-                    if len(np.unique(sorted_flows)) >= 2:
-                        pump_curve_func = interp1d(sorted_flows, sorted_heads, 
-                                                 bounds_error=False, fill_value="extrapolate")
-                        
-                        from scipy.optimize import minimize_scalar
-                        
-                        diff_func = lambda q: abs(pump_curve_func(q) - (static_head + k_factor * q**2))
-                        
-                        result = minimize_scalar(diff_func, 
-                                               bounds=(min(sorted_flows), max(sorted_flows)), 
-                                               method='bounded')
-                        
-                        if result.success:
-                            op_flow = result.x
-                            op_head = static_head + k_factor * op_flow**2
-                            
-                            if min(sorted_flows) <= op_flow <= max(sorted_flows):
-                                # Plot operating point
-                                ax.plot(op_flow, op_head, 'o', markersize=8, color=color, zorder=40)
-                                
-                                # Add annotation
-                                ax.annotate(f"{model_name} (50Hz): ({op_flow:.1f}, {op_head:.1f})",
-                                          xy=(op_flow, op_head),
-                                          xytext=(10, 5),
-                                          textcoords='offset points',
-                                          color=color,
-                                          fontweight='bold',
-                                          zorder=45)
-                except Exception as e:
-                    print(f"Error finding 50Hz intersection: {e}")
+            # Create a function representing the pump curve
+            pump_curve_func = interpolate.interp1d(flow_values, head_values, 
+                                                  fill_value="extrapolate")
             
-            # For 60Hz data
-            if '60Hz' in frequencies_to_plot:
-                flow_values_60hz = flow_values * 1.2
-                head_values_60hz = head_values * 1.44
-                
-                try:
-                    from scipy.interpolate import interp1d
-                    
-                    # Sort data points by flow for interpolation
-                    sorted_indices = np.argsort(flow_values_60hz)
-                    sorted_flows = flow_values_60hz[sorted_indices]
-                    sorted_heads = head_values_60hz[sorted_indices]
-                    
-                    if len(np.unique(sorted_flows)) >= 2:
-                        pump_curve_func = interp1d(sorted_flows, sorted_heads, 
-                                                 bounds_error=False, fill_value="extrapolate")
-                        
-                        from scipy.optimize import minimize_scalar
-                        
-                        diff_func = lambda q: abs(pump_curve_func(q) - (static_head + k_factor * q**2))
-                        
-                        result = minimize_scalar(diff_func, 
-                                               bounds=(min(sorted_flows), max(sorted_flows)), 
-                                               method='bounded')
-                        
-                        if result.success:
-                            op_flow = result.x
-                            op_head = static_head + k_factor * op_flow**2
-                            
-                            if min(sorted_flows) <= op_flow <= max(sorted_flows):
-                                # Plot operating point
-                                ax.plot(op_flow, op_head, 's', markersize=8, color=color, zorder=40)
-                                
-                                # Add annotation
-                                ax.annotate(f"{model_name} (60Hz): ({op_flow:.1f}, {op_head:.1f})",
-                                          xy=(op_flow, op_head),
-                                          xytext=(10, -15),
-                                          textcoords='offset points',
-                                          color=color,
-                                          fontweight='bold',
-                                          zorder=45)
-                except Exception as e:
-                    print(f"Error finding 60Hz intersection: {e}")
-    
-    # Get labels based on language
-    if language == 'zh_TW':
-        flow_label = f'流量 ({flow_unit})'
-        head_label = f'揚程 ({head_unit})'
-        title = '泵浦性能曲線'
-    else:
-        flow_label = f'Flow ({flow_unit})'
-        head_label = f'Head ({head_unit})'
-        title = 'Pump Performance Curves'
-    
-    # Set up axis labels
-    ax.set_xlabel(flow_label, fontsize=12, fontweight='bold')
-    ax.set_ylabel(head_label, fontsize=12, fontweight='bold')
-    
-    # Set custom tick spacing if provided, otherwise use automatic tick spacing
-    if flow_tick_spacing is not None and flow_tick_spacing > 0:
-        from matplotlib.ticker import MultipleLocator
-        ax.xaxis.set_major_locator(MultipleLocator(flow_tick_spacing))
-    else:
-        ax.xaxis.set_major_locator(MaxNLocator(7))
-        
-    if head_tick_spacing is not None and head_tick_spacing > 0:
-        from matplotlib.ticker import MultipleLocator
-        ax.yaxis.set_major_locator(MultipleLocator(head_tick_spacing))
-    else:
-        ax.yaxis.set_major_locator(MaxNLocator(7))
-    
-    # Format tick labels based on show_decimals setting
-    if show_decimals:
-        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
-        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
-    else:
-        # Formatter function that shows integers without decimals
-        def integer_formatter(value, pos):
+            # Create a function representing the system curve
+            system_curve_func = lambda q: static_head + k_factor * (q ** 2)
+            
+            # Find intersection points using numerical optimization
+            from scipy.optimize import fsolve
+            
+            # Function to find where the difference between curves is zero
+            def find_intersection(q):
+                return pump_curve_func(q) - system_curve_func(q)
+            
+            # Initial guess for flow at intersection
+            q_guess = max_flow_data / 2
+            
             try:
-                # Round to nearest integer and format without decimals
-                return f'{round(value)}'
-            except (ValueError, TypeError):
-                # Fallback for any conversion errors
-                return f'{value}'
-        
-        # Apply the formatters
-        ax.xaxis.set_major_formatter(plt.FuncFormatter(integer_formatter))
-        ax.yaxis.set_major_formatter(plt.FuncFormatter(integer_formatter))
+                # Find intersection point
+                q_intersection = fsolve(find_intersection, q_guess)[0]
+                
+                # Only plot if intersection is within valid range
+                if min(flow_values) <= q_intersection <= max(flow_values):
+                    h_intersection = pump_curve_func(q_intersection)
+                    
+                    # Plot intersection point
+                    ax.plot(q_intersection, h_intersection, 'ko', markersize=8, 
+                           label=f"{model_name} Operating Point")
+                    
+                    # Annotate intersection point
+                    ax.annotate(f"({q_intersection:.1f}, {h_intersection:.1f})",
+                               xy=(q_intersection, h_intersection),
+                               xytext=(10, 10), textcoords='offset points',
+                               arrowprops=dict(arrowstyle="->", color='black'),
+                               fontsize=9, zorder=40)
+            except:
+                # Skip if intersection can't be found
+                pass
     
-    # Add grid based on user preference
-    if show_grid:
-        ax.grid(True, which='major', linestyle='-', linewidth=0.5)
-        if chart_style == "Modern":
-            ax.grid(True, which='minor', linestyle=':', linewidth=0.5, alpha=0.7)
+    # Set axis limits
+    if max_flow is None:
+        x_max = max_flow_data * 1.1  # Add 10% margin
     else:
-        ax.grid(False)
+        x_max = max_flow
+    
+    if max_head is None:
+        y_max = max_head_data * 1.1  # Add 10% margin
+    else:
+        y_max = max_head
+    
+    ax.set_xlim(min_flow, x_max)
+    ax.set_ylim(min_head, y_max)
+    
+    # Set grid visibility
+    ax.grid(show_grid, which='major', linestyle='-', linewidth=0.5)
+    
+    # Set axis labels
+    if language == 'zh_TW':
+        ax.set_xlabel(f'流量 ({flow_unit})', fontsize=14)
+        ax.set_ylabel(f'揚程 ({head_unit})', fontsize=14)
+        ax.set_title('泵浦性能曲線', fontsize=16)
+    else:
+        ax.set_xlabel(get_text('flow_label', language).format(flow_unit), fontsize=14)
+        ax.set_ylabel(get_text('head_label', language).format(head_unit), fontsize=14)
+        ax.set_title(get_text('pump_curves_title', language), fontsize=16)
+    
+    # Customize tick spacing if provided
+    if flow_tick_spacing is not None and flow_tick_spacing > 0:
+        ax.xaxis.set_major_locator(plt.MultipleLocator(flow_tick_spacing))
+    else:
+        # Auto spacing
+        ax.xaxis.set_major_locator(MaxNLocator(nbins=10, integer=True))
+    
+    if head_tick_spacing is not None and head_tick_spacing > 0:
+        ax.yaxis.set_major_locator(plt.MultipleLocator(head_tick_spacing))
+    else:
+        # Auto spacing
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=10, integer=True))
     
     # Add minor ticks
     ax.xaxis.set_minor_locator(AutoMinorLocator())
     ax.yaxis.set_minor_locator(AutoMinorLocator())
     
-    # Apply custom axis limits if provided
-    x_padding = max_flow_data * 0.1  # 10% padding
-    if max_flow is None:
-        if '60Hz' in frequencies_to_plot:
-            # Add extra space for 60Hz curves (20% higher flow)
-            max_flow_to_use = max_flow_data * 1.2 * 1.1  # 20% for 60Hz + 10% padding
-        else:
-            max_flow_to_use = max_flow_data * 1.1  # Just 10% padding
-    else:
-        max_flow_to_use = float(max_flow)
+    # Format decimal places on ticks based on show_decimals settings
+    if not show_decimals:
+        ax.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, pos: f"{int(x)}"))
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, pos: f"{int(y)}"))
     
-    ax.set_xlim(left=float(min_flow), right=max_flow_to_use)
+    # Customize the legend
+    legend = ax.legend(loc='upper right', fontsize=10, framealpha=0.9)
+    legend.set_zorder(100)  # Make sure legend stays on top
     
-    # Set y-axis limits with padding
-    y_padding = max_head_data * 0.1  # 10% padding
-    if max_head is None:
-        if '60Hz' in frequencies_to_plot:
-            # Add extra space for 60Hz curves (44% higher head)
-            max_head_to_use = max_head_data * 1.44 * 1.1  # 44% for 60Hz + 10% padding
-        else:
-            max_head_to_use = max_head_data * 1.1  # Just 10% padding
-    else:
-        max_head_to_use = float(max_head)
-    
-    ax.set_ylim(bottom=float(min_head), top=max_head_to_use)
-    
-    # Add secondary x-axis for alternative flow units - labels based on language
-    if language == 'zh_TW':
-        m3h_label = f'流量 (m³/h)'
-        gpm_label = f'流量 (GPM)'
-        lpm_label = f'流量 (LPM)'
-        ft_label = f'揚程 (ft)'
-        m_label = f'揚程 (m)'
-    else:
-        m3h_label = f'Flow (m³/h)'
-        gpm_label = f'Flow (GPM)'
-        lpm_label = f'Flow (LPM)'
-        ft_label = f'Head (ft)'
-        m_label = f'Head (m)'
-    
-    if flow_unit == "LPM":
-        # Add m³/h axis
-        ax_m3h = ax.secondary_xaxis(-0.15, functions=(lambda x: x/60, lambda x: x*60))
-        ax_m3h.xaxis.set_major_locator(MaxNLocator(7))
-        ax_m3h.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
-        ax_m3h.set_xlabel(m3h_label, fontsize=12, fontweight='bold', labelpad=10)
+    # Apply style-specific formatting
+    if chart_style == "Modern":
+        # Modern styling
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
         
-        # Add GPM axis
-        ax_gpm = ax.secondary_xaxis(-0.30, functions=(lambda x: x*0.264172, lambda x: x/0.264172))
-        ax_gpm.xaxis.set_major_locator(MaxNLocator(7))
-        ax_gpm.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
-        ax_gpm.set_xlabel(gpm_label, fontsize=12, fontweight='bold', labelpad=10)
-    elif flow_unit == "GPM":
-        # Add LPM axis
-        ax_lpm = ax.secondary_xaxis(-0.15, functions=(lambda x: x*3.78541, lambda x: x/3.78541))
-        ax_lpm.xaxis.set_major_locator(MaxNLocator(7))
-        ax_lpm.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
-        ax_lpm.set_xlabel(lpm_label, fontsize=12, fontweight='bold', labelpad=10)
+        # Use thin spines
+        ax.spines['left'].set_linewidth(1.0)
+        ax.spines['bottom'].set_linewidth(1.0)
         
-        # Add m³/h axis
-        ax_m3h = ax.secondary_xaxis(-0.30, functions=(lambda x: x*0.227125, lambda x: x/0.227125))
-        ax_m3h.xaxis.set_major_locator(MaxNLocator(7))
-        ax_m3h.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
-        ax_m3h.set_xlabel(m3h_label, fontsize=12, fontweight='bold', labelpad=10)
-    elif flow_unit == "m³/h":
-        # Add LPM axis
-        ax_lpm = ax.secondary_xaxis(-0.15, functions=(lambda x: x*16.6667, lambda x: x/16.6667))
-        ax_lpm.xaxis.set_major_locator(MaxNLocator(7))
-        ax_lpm.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
-        ax_lpm.set_xlabel(lpm_label, fontsize=12, fontweight='bold', labelpad=10)
-        
-        # Add GPM axis
-        ax_gpm = ax.secondary_xaxis(-0.30, functions=(lambda x: x*4.40287, lambda x: x/4.40287))
-        ax_gpm.xaxis.set_major_locator(MaxNLocator(7))
-        ax_gpm.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.1f}'))
-        ax_gpm.set_xlabel(gpm_label, fontsize=12, fontweight='bold', labelpad=10)
-    
-    # Add secondary y-axis for alternative head units
-    if head_unit == "m":
-        # Position the ft axis
-        ax_ft = ax.secondary_yaxis(1.05, functions=(lambda x: x*3.28084, lambda x: x/3.28084))
-        ax_ft.yaxis.set_major_locator(MaxNLocator(7))
-        ax_ft.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
-        ax_ft.set_ylabel(ft_label, fontsize=12, fontweight='bold', labelpad=15)
-    elif head_unit == "ft":
-        # Position the meters axis
-        ax_m = ax.secondary_yaxis(1.05, functions=(lambda x: x/3.28084, lambda x: x*3.28084))
-        ax_m.yaxis.set_major_locator(MaxNLocator(7))
-        ax_m.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f'{y:.1f}'))
-        ax_m.set_ylabel(m_label, fontsize=12, fontweight='bold', labelpad=15)
-    
-    # Add frequency information at top left corner
-    if len(frequencies_to_plot) == 1:
-        # Single frequency
-        freq_text = frequencies_to_plot[0]
+        # Use tight layout
+        plt.tight_layout()
     else:
-        # Multiple frequencies
-        freq_text = " / ".join(frequencies_to_plot)
-        
-    plt.text(0.02, 0.98, freq_text, 
-            transform=ax.transAxes, 
-            fontsize=14,
-            fontweight='bold',
-            horizontalalignment='left',
-            verticalalignment='top',
-            bbox=dict(facecolor='white', alpha=0.7, boxstyle='round,pad=0.5'))
-    
-    # Add legend with model names and frequencies
-    ax.legend(loc='upper right', fontsize=10, framealpha=0.7)
-    
-    plt.title(title, fontsize=16, fontweight='bold', pad=20)
-    plt.tight_layout()
+        # Classic styling
+        for spine in ax.spines.values():
+            spine.set_linewidth(1.5)
+            
+        # Thicker grid lines
+        if show_grid:
+            ax.grid(True, which='major', linestyle='-', linewidth=0.8)
+            ax.grid(True, which='minor', linestyle=':', linewidth=0.5)
     
     return fig
 
-def download_button_for_plot(fig, language='en'):
-    """Create a download button for saving the plot as PNG"""
-    # Save figure to a temporary buffer
+def download_button_for_plot(fig, lang='en'):
+    """Create a download button for the matplotlib figure"""
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=300, bbox_inches='tight')
+    fig.savefig(buf, format='png', dpi=300, bbox_inches='tight')
     buf.seek(0)
-    
-    # Get button label based on language
-    button_label = "下載圖表 (PNG)" if language == 'zh_TW' else "Download Plot (PNG)"
     
     # Create download button
     btn = st.download_button(
-        label=button_label,
+        label=get_text('download_plot', lang),
         data=buf,
-        file_name="pump_curve_plot.png",
-        mime="image/png"
+        file_name='pump_curve.png',
+        mime='image/png'
     )
+    
+    return btn
 
 if __name__ == "__main__":
     main()
