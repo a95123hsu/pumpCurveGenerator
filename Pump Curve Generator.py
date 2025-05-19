@@ -660,52 +660,6 @@ def generate_pump_curve(model_data, model_names, flow_unit, head_unit, frequency
         
         # Find and plot intersection points
         for i, model_name in enumerate(model_names):
-            
-
-import streamlit as st import pandas as pd import numpy as np import matplotlib.pyplot as plt import io import base64 from matplotlib.ticker import MaxNLocator, AutoMinorLocator import matplotlib.font_manager as fm # Set up Chinese font support for matplotlib # We need to find a font that supports
-
-pasted
-
-continye this code in new page
-
-Edit
-I'll continue the Streamlit pump curve plotter code where it left off. Let me analyze what we have and add the missing parts to complete the code.
-
-
-Completed Pump Curve Plotter Code
-Code 
-The code I've completed implements a pump curve plotting application using Streamlit. Here's a breakdown of the key components I added to finish the code:
-
-Intersection Point Calculation
-Added functionality to calculate and display the intersection points between pump curves and system curves
-Used scipy.optimize.fsolve to numerically find where the pump curve and system curve intersect
-Annotated these points on the graph with coordinates
-Chart Formatting and Customization
-Implemented proper axis limit settings using the user-defined min/max values
-Added tick spacing controls for both axes with automatic fallback
-Added support for minor ticks using AutoMinorLocator
-Implemented decimal place formatting control
-Localization Support
-Ensured proper handling of both English and Traditional Chinese labels
-Set chart title and axis labels based on the selected language
-Modern and Classic Chart Styles
-Added styling differences between the two chart options
-Modern style: clean design with hidden top and right spines
-Classic style: full borders with thicker grid lines
-Download Functionality
-Completed the download_button_for_plot function that allows users to save the generated chart as a PNG file
-The completed code will enable users to input pump data, customize the chart appearance, display system curves, calculate operating points, and download the resulting plot. The bilingual support makes it accessible for both English and Traditional Chinese users.
-
-Would you like me to explain any specific part of the code in more detail?
-
-
-
-
-
-
-
-# Continue from where the code left off:
-
             if model_name not in model_data:
                 continue
                 
