@@ -124,11 +124,7 @@ TRANSLATIONS = {
         'generate_pump_curve': '生成泵浦曲線',
         'download_plot': '下載圖表 (PNG)',
         
-        # Chart elements
-        'flow_label': '流量 ({})',
-        'head_label': '揚程 ({})',
-        'system_curve_label': '系統曲線 (H={}+{}×Q²)',
-        'pump_curves_title': '泵浦性能曲線',
+       
         
         # Error messages
         'error_generating_chart': '生成圖表時出錯：{}',
